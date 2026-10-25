@@ -44,4 +44,7 @@ js/app.js      hash router + boot
 To migrate to React later, rewrite `views/` as components and keep the data layer as it is. The data stays in the browser at the same URL, so nothing is lost.
 
 ## Credits
-The exercise library comes from [free-exercise-db](https://github.com/yuhonas/free-exercise-db) (public domain, Unlicense). Exercise photos load from that repo when you're online.
+The exercise library (names, equipment, muscles, instructions and photos) comes from **[free-exercise-db](https://github.com/yuhonas/free-exercise-db)** by [yuhonas](https://github.com/yuhonas). That project builds on the original **[exercises.json](https://github.com/wrkout/exercises.json)** dataset by [Ollie Jennings](https://github.com/OllieJennings). Both are released into the public domain under the [Unlicense](https://unlicense.org/). Thank you!
+
+- `data/exercises.json` is a trimmed copy reshaped for this app: equipment is mapped to the app's own list, and unused fields are dropped. `tools/build-exercises.py` regenerates it from upstream.
+- Exercise photos aren't copied into this repo. They load from free-exercise-db's GitHub-hosted images when you're online, which is how that project documents using them.

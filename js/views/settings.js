@@ -80,6 +80,12 @@ export async function renderSettings(root, _params, rerender) {
       fileInput
     ),
     h('p', { class: 'muted small pad' },
-      `Data is stored only on this device${persisted ? ' (persistent storage granted)' : ''}. Export a backup now and then — deleting the app from the Home Screen deletes its data.`)
+      `Data is stored only on this device${persisted ? ' (persistent storage granted)' : ''}. Export a backup now and then — deleting the app from the Home Screen deletes its data.`),
+    h('p', { class: 'muted small pad' },
+      'Exercise library: ',
+      h('a', { href: 'https://github.com/yuhonas/free-exercise-db', target: '_blank', rel: 'noopener' }, 'free-exercise-db'),
+      ' by yuhonas, based on ',
+      h('a', { href: 'https://github.com/wrkout/exercises.json', target: '_blank', rel: 'noopener' }, 'exercises.json'),
+      ' by Ollie Jennings. Public domain (Unlicense).')
   );
 }
