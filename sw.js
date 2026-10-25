@@ -1,6 +1,6 @@
 // Offline support: pre-cache the app shell, serve cache-first, refresh in background.
 // Bump VERSION whenever you deploy changes so phones pick them up.
-const VERSION = 'tmf-v2';
+const VERSION = 'tmf-v5';
 const SHELL = [
   './',
   './index.html',
@@ -11,11 +11,16 @@ const SHELL = [
   './js/dates.js',
   './js/dom.js',
   './js/store.js',
+  './js/library.js',
+  './js/legacy.js',
   './js/timer.js',
   './js/views/week.js',
   './js/views/day.js',
+  './js/views/picker.js',
+  './js/views/exercise-info.js',
   './js/views/history.js',
   './js/views/settings.js',
+  './data/exercises.json',
   './icons/icon-180.png',
   './icons/icon-192.png',
   './icons/icon-512.png',

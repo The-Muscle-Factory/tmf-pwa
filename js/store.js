@@ -1,23 +1,50 @@
 // Domain layer: workout days, templates, settings, backup. Pure data — no DOM.
 //
-// Day shape:
-//   { date: 'YYYY-MM-DD', title: 'Push Day', notes: '',
-//     exercises: [{ id, name, sets: [{ weight: kg|null, reps: int|null, done: bool }] }] }
-// Weights are always stored in kg; the UI converts for display.
+// Day shape (v2):
+//   { v: 2, date: 'YYYY-MM-DD', type: 'Push' | … | 'Custom' | '', title: 'Push', notes: '',
+//     exercises: [Exercise] }
+// Exercise:
+//   { id, exId: dataset id or 'custom:<slug>', name, equipment, ratio: '1:1'|'2:1'|null,
+//     unit: 'kg'|'lbs', sets: [Set] }
+// Set: strength { weight: number|null (in the exercise's unit), reps: string, done }
+//      cardio   { min: number|null, km: number|null, note: string, done }
+// An exercise is cardio when its equipment is 'Cardio'.
 import * as db from './db.js';
 import { weekDays } from './dates.js';
+import { loadLibrary } from './library.js';
+import { upgradeDay, upgradeTemplate } from './legacy.js';
 
 export const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
 
-export const emptyDay = (date) => ({ date, title: '', notes: '', exercises: [] });
-export const newSet = (prev) => ({ weight: prev?.weight ?? null, reps: prev?.reps ?? null, done: false });
-export const newExercise = (name, setCount = 3) => ({
-  id: uid(),
-  name: name.trim(),
-  sets: Array.from({ length: setCount }, () => newSet()),
-});
+export const emptyDay = (date) => ({ v: 2, date, type: '', title: '', notes: '', exercises: [] });
+export const isCardio = (ex) => ex.equipment === 'Cardio';
+export const variantKey = (ex) => `${ex.exId}|${ex.equipment}|${ex.equipment === 'Cable' ? ex.ratio || '1:1' : ''}`;
 
-export const isEmptyDay = (day) => !day.title && !day.notes.trim() && day.exercises.length === 0;
+export const newSet = (prev) => ({ weight: prev?.weight ?? null, reps: '', min: null, km: null, note: '', done: false });
+
+export const hasData = (s) =>
+  s.weight != null || !!String(s.reps ?? '').trim() || s.min != null || s.km != null || !!s.note?.trim();
+
+export function newExercise({ exId, name, equipment, ratio, unit }) {
+  return {
+    id: uid(),
+    exId,
+    name,
+    equipment,
+    ratio: equipment === 'Cable' ? ratio || '1:1' : null,
+    unit: unit || 'kg',
+    sets: [newSet()],
+  };
+}
+
+export const isEmptyDay = (day) => !day.type && !day.title && !day.notes.trim() && day.exercises.length === 0;
+
+// Upgrades anything stored in an older format. Runs once at startup.
+export async function migrate() {
+  await loadLibrary();
+  for (const d of await db.getAll('days')) if (d.v !== 2) await db.put('days', upgradeDay(d, uid));
+  for (const t of await db.getAll('templates')) if (t.v !== 2) await db.put('templates', upgradeTemplate(t));
+}
 
 // ---- Days ----
 export async function getDay(date) {
@@ -36,70 +63,74 @@ export async function getWeek(startIso) {
   return days.map((d) => byDate[d] || emptyDay(d));
 }
 
-export const allDays = () => db.getAll('days');
+const allDaysDesc = async () => (await db.getAll('days')).sort((a, b) => b.date.localeCompare(a.date));
 
-const norm = (name) => name.trim().toLowerCase();
-
-// Every past session of an exercise, newest first.
-export async function exerciseHistory(name, { before } = {}) {
-  const days = await allDays();
+// Sessions of an exercise, newest first. `match` filters exercise entries.
+async function sessions(match, before) {
   const out = [];
-  for (const day of days) {
+  for (const day of await allDaysDesc()) {
     if (before && day.date >= before) continue;
     for (const ex of day.exercises) {
-      if (norm(ex.name) === norm(name) && ex.sets.some((s) => s.weight != null || s.reps != null)) {
-        out.push({ date: day.date, title: day.title, sets: ex.sets });
-      }
+      if (match(ex) && ex.sets.some(hasData)) out.push({ date: day.date, title: day.title, ex });
     }
   }
-  return out.sort((a, b) => b.date.localeCompare(a.date));
+  return out;
 }
 
-export async function lastSession(name, beforeDate) {
-  return (await exerciseHistory(name, { before: beforeDate }))[0] || null;
+export const historyFor = (exId) => sessions((e) => e.exId === exId);
+
+export async function lastSession(ex, beforeDate) {
+  const key = variantKey(ex);
+  return (await sessions((e) => variantKey(e) === key, beforeDate))[0] || null;
 }
 
-export async function exerciseNames() {
-  const days = await allDays();
-  const templates = await getTemplates();
-  const names = new Map();
-  for (const d of days) for (const e of d.exercises) names.set(norm(e.name), e.name);
-  for (const t of templates) for (const e of t.exercises) names.set(norm(e.name), e.name);
-  return [...names.values()].sort((a, b) => a.localeCompare(b));
+// Equipment/ratio/unit you used last time for this exercise, to preselect them.
+export async function lastSetup(exId) {
+  for (const day of await allDaysDesc()) {
+    const ex = day.exercises.find((e) => e.exId === exId);
+    if (ex) return { equipment: ex.equipment, ratio: ex.ratio, unit: ex.unit };
+  }
+  return null;
 }
 
-// Most recent day with the same title before `date` (e.g. last "Push Day").
-export async function previousDayWithTitle(title, date) {
-  const days = (await allDays())
-    .filter((d) => d.date < date && norm(d.title) === norm(title))
-    .sort((a, b) => b.date.localeCompare(a.date));
-  return days[0] || null;
+// Exercises you've logged, most recent first, one per exercise id.
+export async function recentExercises() {
+  const seen = new Map();
+  for (const day of await allDaysDesc()) {
+    for (const ex of day.exercises) {
+      const s = seen.get(ex.exId);
+      if (s) s.count++;
+      else seen.set(ex.exId, { exId: ex.exId, name: ex.name, equipment: ex.equipment, last: day.date, count: 1 });
+    }
+  }
+  return [...seen.values()];
 }
 
-// Copies exercises and set counts; values stay empty so the previous numbers
-// show as placeholders until each set is ticked.
-export async function copyFromDate(fromDate, toDay) {
-  const src = await db.get('days', fromDate);
-  if (!src) return null;
-  return {
-    ...toDay,
-    title: toDay.title || src.title,
-    exercises: [...toDay.exercises, ...src.exercises.map((e) => newExercise(e.name, e.sets.length))],
-  };
+// Most recent day before `date` with the same workout title (e.g. the last "Push").
+export async function previousSameWorkout(day) {
+  const title = day.title.trim().toLowerCase();
+  if (!title) return null;
+  return (await allDaysDesc()).find((d) => d.date < day.date && d.title.trim().toLowerCase() === title && d.exercises.length) || null;
+}
+
+// Appends another day's exercises with one empty set each; PREVIOUS shows the old numbers.
+export function repeatExercises(source, day) {
+  return { ...day, exercises: [...day.exercises, ...source.exercises.map((e) => newExercise(e))] };
 }
 
 // ---- Templates ----
-// Template shape: { id, name, exercises: [{ name, sets: number }] }
+// Template shape: { v: 2, id, name, exercises: [{ exId, name, equipment, ratio, unit }] }
 export async function getTemplates() {
   return (await db.getAll('templates')).sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export async function saveTemplateFromDay(name, day) {
-  const existing = (await getTemplates()).find((t) => norm(t.name) === norm(name));
+  const existing = (await getTemplates()).find((t) => t.name.toLowerCase() === name.trim().toLowerCase());
   const tpl = {
+    v: 2,
     id: existing?.id || uid(),
     name: name.trim(),
-    exercises: day.exercises.map((e) => ({ name: e.name, sets: Math.max(1, e.sets.length) })),
+    exercises: day.exercises.map(({ exId, name: n, equipment, ratio, unit }) => ({ exId, name: n, equipment, ratio, unit })),
   };
   await db.put('templates', tpl);
   return tpl;
@@ -107,13 +138,7 @@ export async function saveTemplateFromDay(name, day) {
 
 export const deleteTemplate = (id) => db.del('templates', id);
 
-export function applyTemplate(tpl, day) {
-  return {
-    ...day,
-    title: day.title || tpl.name,
-    exercises: [...day.exercises, ...tpl.exercises.map((e) => newExercise(e.name, e.sets))],
-  };
-}
+export const applyTemplate = (tpl, day) => repeatExercises(tpl, day);
 
 // ---- Settings ----
 export const DEFAULT_SETTINGS = { unit: 'kg', restSeconds: 90 };
@@ -127,25 +152,23 @@ export async function saveSettings(value) {
   await db.put('settings', { key: 'app', value });
 }
 
-// ---- Units ----
+// ---- Numbers ----
 const LB_PER_KG = 2.2046226218;
-export const toDisplay = (kg, unit) => {
-  if (kg == null) return '';
-  const v = unit === 'lbs' ? kg * LB_PER_KG : kg;
-  return String(Math.round(v * 100) / 100);
+export const toKg = (w, unit) => (unit === 'lbs' ? w / LB_PER_KG : w);
+export const fromKg = (kg, unit) => (unit === 'lbs' ? kg * LB_PER_KG : kg);
+export const fmtNum = (n) => (n == null ? '' : String(Math.round(n * 100) / 100));
+export const parseNum = (v) => {
+  const n = parseFloat(String(v).replace(',', '.'));
+  return Number.isNaN(n) ? null : n;
 };
-export const fromDisplay = (value, unit) => {
-  if (value === '' || value == null) return null;
-  const n = parseFloat(String(value).replace(',', '.'));
-  if (Number.isNaN(n)) return null;
-  return unit === 'lbs' ? n / LB_PER_KG : n;
-};
+// "7+3" -> 10
+export const repsTotal = (reps) => (String(reps ?? '').match(/\d+/g) || []).reduce((a, b) => a + Number(b), 0);
 
 // ---- Backup ----
 export async function exportAll() {
   return {
     app: 'tmf-pwa',
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
     days: await db.getAll('days'),
     templates: await db.getAll('templates'),
@@ -153,13 +176,54 @@ export async function exportAll() {
   };
 }
 
-export async function importAll(data) {
+function validateBackup(data) {
   if (!data || data.app !== 'tmf-pwa' || !Array.isArray(data.days)) {
     throw new Error('Not a TMF backup file');
   }
+}
+
+export async function importAll(data) {
+  validateBackup(data);
+  await loadLibrary();
   await db.clear('days');
   await db.clear('templates');
-  for (const d of data.days) await db.put('days', d);
-  for (const t of data.templates || []) await db.put('templates', t);
+  for (const d of data.days) await db.put('days', upgradeDay(d, uid));
+  for (const t of data.templates || []) await db.put('templates', upgradeTemplate(t));
   if (data.settings) await saveSettings({ ...DEFAULT_SETTINGS, ...data.settings });
+}
+
+// Adds imported days without losing anything already logged. On a date that
+// already has a workout, only exercises not already there are appended, so
+// importing the same file twice doesn't duplicate anything.
+export async function mergeImport(data) {
+  validateBackup(data);
+  await loadLibrary();
+  let added = 0;
+  let merged = 0;
+  for (const raw of data.days) {
+    const incoming = upgradeDay(raw, uid);
+    const existing = await db.get('days', incoming.date);
+    if (!existing) {
+      await db.put('days', incoming);
+      added++;
+      continue;
+    }
+    const have = new Set(existing.exercises.map(variantKey));
+    const extra = incoming.exercises.filter((e) => !have.has(variantKey(e)));
+    const notes = existing.notes.trim() ? existing.notes : incoming.notes;
+    if (!extra.length && notes === existing.notes && (existing.title || !incoming.title)) continue;
+    await db.put('days', {
+      ...existing,
+      type: existing.type || incoming.type,
+      title: existing.title || incoming.title,
+      notes,
+      exercises: [...existing.exercises, ...extra.map((e) => ({ ...e, id: uid() }))],
+    });
+    merged++;
+  }
+  const names = new Set((await getTemplates()).map((t) => t.name.toLowerCase()));
+  for (const t of data.templates || []) {
+    if (!names.has(t.name.toLowerCase())) await db.put('templates', { ...upgradeTemplate(t), id: uid() });
+  }
+  return { added, merged };
 }

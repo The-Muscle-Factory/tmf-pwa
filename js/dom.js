@@ -5,10 +5,12 @@ export function h(tag, props, ...children) {
     if (v == null || v === false) continue;
     if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
     else if (k === 'class') el.className = v;
-    else if (k === 'value' || k === 'checked') el[k] = v;
+    else if (k === 'value' || k === 'checked') continue; // set after children (e.g. <select> options)
     else el.setAttribute(k, v === true ? '' : v);
   }
   append(el, children);
+  if (props?.value != null) el.value = props.value;
+  if (props?.checked != null) el.checked = props.checked;
   return el;
 }
 

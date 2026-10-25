@@ -1,10 +1,11 @@
-// Hash router + boot. Routes: #/week/:date, #/day/:date, #/exercises, #/history/:name, #/settings
+// Hash router + boot. Routes: #/week/:date, #/day/:date, #/exercises, #/exercise/:exId, #/settings
 import { h } from './dom.js';
 import { todayISO, weekStart, isValidISO } from './dates.js';
 import { mountTimer } from './timer.js';
 import { renderWeek } from './views/week.js';
 import { renderDay } from './views/day.js';
-import { renderExercises, renderHistory } from './views/history.js';
+import { renderExercises, renderExercise } from './views/history.js';
+import { migrate } from './store.js';
 import { renderSettings } from './views/settings.js';
 
 const main = document.getElementById('main');
@@ -16,7 +17,7 @@ function parse() {
   if (view === 'week' && isValidISO(arg)) return { tab: 'week', render: renderWeek, params: { date: arg } };
   if (view === 'day' && isValidISO(arg)) return { tab: arg === todayISO() ? 'today' : 'week', render: renderDay, params: { date: arg } };
   if (view === 'exercises') return { tab: 'exercises', render: renderExercises, params: {} };
-  if (view === 'history' && arg) return { tab: 'exercises', render: renderHistory, params: { name: arg } };
+  if (view === 'exercise' && arg) return { tab: 'exercises', render: renderExercise, params: { exId: arg } };
   if (view === 'settings') return { tab: 'settings', render: renderSettings, params: {} };
   return null;
 }
@@ -46,7 +47,7 @@ tabs.replaceChildren(
 
 window.addEventListener('hashchange', () => route());
 mountTimer(document.getElementById('timer'));
-route();
+migrate().finally(() => route());
 
 navigator.storage?.persist?.();
 if ('serviceWorker' in navigator) {
