@@ -1,4 +1,4 @@
-import { h, toast, mount } from '../dom.js';
+import { h, toast, sheet, mount } from '../dom.js';
 import * as store from '../store.js';
 import { todayISO } from '../dates.js';
 
@@ -34,9 +34,18 @@ export async function renderSettings(root, _params, rerender) {
       if (!f) return;
       try {
         const data = JSON.parse(await f.text());
-        if (!confirm(`Replace all data with backup (${data.days?.length ?? 0} days)?`)) return;
-        await store.importAll(data);
-        toast('Backup restored');
+        e.target.value = '';
+        const mode = await sheet(`Import ${data.days?.length ?? 0} days`, [
+          { label: 'Add to my data (keeps everything already logged)', value: 'merge' },
+          { label: 'Replace all my data with this file', value: 'replace', danger: true },
+        ]);
+        if (mode === 'merge') {
+          const { added, merged } = await store.mergeImport(data);
+          toast(`Imported: ${added} new days, ${merged} updated`);
+        } else if (mode === 'replace' && confirm('This deletes everything currently in the app. Continue?')) {
+          await store.importAll(data);
+          toast('Backup restored');
+        } else return;
         rerender();
       } catch (err) {
         alert(`Import failed: ${err.message}`);
@@ -67,7 +76,7 @@ export async function renderSettings(root, _params, rerender) {
     h('h3', { class: 'label' }, 'Backup'),
     h('div', { class: 'group' },
       h('div', { class: 'group-row' }, h('span', null, 'Export all data'), h('button', { class: 'btn secondary', onclick: doExport }, 'Export')),
-      h('div', { class: 'group-row' }, h('span', null, 'Restore from file'), h('button', { class: 'btn secondary', onclick: () => fileInput.click() }, 'Import')),
+      h('div', { class: 'group-row' }, h('span', null, 'Import from file'), h('button', { class: 'btn secondary', onclick: () => fileInput.click() }, 'Import')),
       fileInput
     ),
     h('p', { class: 'muted small pad' },

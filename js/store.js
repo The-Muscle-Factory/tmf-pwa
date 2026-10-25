@@ -153,13 +153,50 @@ export async function exportAll() {
   };
 }
 
-export async function importAll(data) {
+function validateBackup(data) {
   if (!data || data.app !== 'tmf-pwa' || !Array.isArray(data.days)) {
     throw new Error('Not a TMF backup file');
   }
+}
+
+export async function importAll(data) {
+  validateBackup(data);
   await db.clear('days');
   await db.clear('templates');
   for (const d of data.days) await db.put('days', d);
   for (const t of data.templates || []) await db.put('templates', t);
   if (data.settings) await saveSettings({ ...DEFAULT_SETTINGS, ...data.settings });
+}
+
+// Adds imported days without losing anything already logged. On a date that
+// already has a workout, only exercises not already there are appended, so
+// importing the same file twice doesn't duplicate anything.
+export async function mergeImport(data) {
+  validateBackup(data);
+  let added = 0;
+  let merged = 0;
+  for (const incoming of data.days) {
+    const existing = await db.get('days', incoming.date);
+    if (!existing) {
+      await db.put('days', { ...emptyDay(incoming.date), ...incoming });
+      added++;
+      continue;
+    }
+    const have = new Set(existing.exercises.map((e) => norm(e.name)));
+    const extra = (incoming.exercises || []).filter((e) => !have.has(norm(e.name)));
+    const notes = existing.notes.trim() ? existing.notes : incoming.notes || '';
+    if (!extra.length && notes === existing.notes && (existing.title || !incoming.title)) continue;
+    await db.put('days', {
+      ...existing,
+      title: existing.title || incoming.title || '',
+      notes,
+      exercises: [...existing.exercises, ...extra.map((e) => ({ ...e, id: uid() }))],
+    });
+    merged++;
+  }
+  const names = new Set((await getTemplates()).map((t) => norm(t.name)));
+  for (const t of data.templates || []) {
+    if (!names.has(norm(t.name))) await db.put('templates', { ...t, id: uid() });
+  }
+  return { added, merged };
 }
