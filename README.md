@@ -2,17 +2,18 @@
 
 A personal workout log you install on your iPhone as a PWA. Plain HTML/CSS/JS with no build step, and everything is stored on the device in IndexedDB.
 
-## Features (phase 1)
+## Features
 - **Week view**: Monday–Sunday calendar weeks. Each day shows its workout name and how many sets are done.
-- **Day log**: name the workout (e.g. *Push Day*), add exercises, and log **weight + reps per set**. Tick ✓ when a set is done.
-- **PREVIOUS column** (like Hevy): shows what you did last time. Tap it to copy, or tick ✓ to fill empty fields from it.
-- **Templates**: save a day as a template and start future days from it, or copy last week's same weekday.
-- **Exercise names autocomplete** from your history.
-- **Rest timer** starts when you tick a set (off / 1:00 / 1:30 / 2:00 / 3:00, ±15s).
-- **Notes** for each day.
-- **Exercise history**: every session, plus heaviest set and estimated 1RM.
-- **kg / lbs** toggle (stored in kg internally).
-- **Export / import** a JSON backup.
+- **Structured day log**:
+  - Pick the workout type (Push, Pull, Legs, Upper/Lower Body, Arms, Abs & Core, Full Body, Cardio, Rest, or Custom).
+  - Add exercises from a searchable library of 870+ exercises, filtered by equipment and muscle. You can also create your own.
+  - Each exercise has an equipment dropdown, a cable ratio (1:1 / 2:1) when it's a cable, and a kg/lbs toggle.
+  - Sets are rows of weight + reps (reps accept things like `7+3`). Cardio sets record minutes, km and a note.
+- **Repeat last workout**: after choosing a type, one tap adds the exercises from your last workout of that type.
+- **PREVIOUS column** (like Hevy): shows last time's numbers for the same exercise, equipment and ratio. Tap it to copy, or tick ✓ to fill blanks from it.
+- **Rest timer** starts when you tick a set.
+- **Exercise pages**: muscles, photos, how-to steps, and your history grouped by equipment/ratio, with heaviest set and estimated 1RM.
+- **Templates**, day **notes**, a default-unit setting, and **export / import** (merge or replace) of a JSON backup.
 - Works fully offline.
 
 ## Run locally
@@ -29,12 +30,18 @@ When you ship changes, bump `VERSION` in `sw.js` so the installed app picks up t
 
 ## Code layout
 ```
-js/db.js       IndexedDB wrapper           ┐ data layer: no DOM,
-js/store.js    days/templates/settings     │ reusable unchanged if
-js/dates.js    date helpers                ┘ moving to React + Vite
+js/db.js       IndexedDB wrapper           ┐
+js/store.js    days/templates/settings     │ data layer: no DOM,
+js/library.js  exercise dataset + search   │ reusable unchanged if
+js/legacy.js   upgrades old saved data     │ moving to React + Vite
+js/dates.js    date helpers                ┘
 js/dom.js      h() element helper, sheet, toast
 js/timer.js    rest timer
-js/views/*.js  screens (week, day, history, settings)
+js/views/*.js  screens (week, day, exercise picker/info, history, settings)
+data/exercises.json  exercise library (rebuild: python3 tools/build-exercises.py)
 js/app.js      hash router + boot
 ```
 To migrate to React later, rewrite `views/` as components and keep the data layer as it is. The data stays in the browser at the same URL, so nothing is lost.
+
+## Credits
+The exercise library comes from [free-exercise-db](https://github.com/yuhonas/free-exercise-db) (public domain, Unlicense). Exercise photos load from that repo when you're online.

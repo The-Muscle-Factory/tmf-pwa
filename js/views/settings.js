@@ -56,7 +56,7 @@ export async function renderSettings(root, _params, rerender) {
   mount(root,
     h('header', { class: 'topbar' }, h('div', { class: 'topbar-title' }, h('div', null, 'Settings'))),
     h('div', { class: 'group' },
-      h('div', { class: 'group-row' }, h('span', null, 'Weight unit'), seg([['kg', 'kg'], ['lbs', 'lbs']], settings.unit, (unit) => update({ unit }))),
+      h('div', { class: 'group-row' }, h('span', null, 'Default unit'), seg([['kg', 'kg'], ['lbs', 'lbs']], settings.unit, (unit) => update({ unit }))),
       h('div', { class: 'group-row' }, h('span', null, 'Rest timer'),
         seg([[0, 'Off'], [60, '1:00'], [90, '1:30'], [120, '2:00'], [180, '3:00']], settings.restSeconds, (restSeconds) => update({ restSeconds })))
     ),
