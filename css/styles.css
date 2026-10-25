@@ -215,3 +215,4 @@ button { background: none; border: 0; padding: 0; cursor: pointer; }
   background: var(--card-2); padding: 10px 16px; border-radius: 999px; font-size: 14px;
 }
 .toast.show { transform: translate(-50%, 0); opacity: 1; }
+.ok { color: var(--good); font-weight: 600; }

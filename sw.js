@@ -1,6 +1,6 @@
 // Offline support: pre-cache the app shell, serve cache-first, refresh in background.
 // Bump VERSION whenever you deploy changes so phones pick them up.
-const VERSION = 'tmf-v1';
+const VERSION = 'tmf-v2';
 const SHELL = [
   './',
   './index.html',
@@ -37,14 +37,24 @@ self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET' || new URL(e.request.url).origin !== location.origin) return;
   e.respondWith(
     caches.open(VERSION).then(async (cache) => {
-      const cached = await cache.match(e.request, { ignoreSearch: true });
+      // Any page navigation (start URL with or without trailing slash, query
+      // strings added by iOS, etc.) gets the cached app shell.
+      const isPage = e.request.mode === 'navigate';
+      const cached = isPage
+        ? await cache.match('./index.html')
+        : await cache.match(e.request, { ignoreSearch: true });
       const network = fetch(e.request)
         .then((res) => {
-          if (res.ok) cache.put(e.request, res.clone());
+          if (res.ok && !isPage) cache.put(e.request, res.clone());
+          if (res.ok && isPage) cache.put('./index.html', res.clone());
           return res;
         })
-        .catch(() => cached);
-      return cached || network;
+        .catch(() => cached || Response.error());
+      if (cached) {
+        e.waitUntil(network.catch(() => {}));
+        return cached;
+      }
+      return network;
     })
   );
 });

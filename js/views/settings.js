@@ -6,6 +6,7 @@ export async function renderSettings(root, _params, rerender) {
   const settings = await store.getSettings();
   const templates = await store.getTemplates();
   const persisted = (await navigator.storage?.persisted?.()) ?? false;
+  const offlineReady = !!navigator.serviceWorker?.controller && (await caches.keys()).length > 0;
 
   const update = async (patch) => {
     await store.saveSettings({ ...settings, ...patch });
@@ -49,6 +50,10 @@ export async function renderSettings(root, _params, rerender) {
       h('div', { class: 'group-row' }, h('span', null, 'Weight unit'), seg([['kg', 'kg'], ['lbs', 'lbs']], settings.unit, (unit) => update({ unit }))),
       h('div', { class: 'group-row' }, h('span', null, 'Rest timer'),
         seg([[0, 'Off'], [60, '1:00'], [90, '1:30'], [120, '2:00'], [180, '3:00']], settings.restSeconds, (restSeconds) => update({ restSeconds })))
+    ),
+    h('div', { class: 'group' },
+      h('div', { class: 'group-row' }, h('span', null, 'Works offline'),
+        h('span', { class: offlineReady ? 'ok' : 'muted' }, offlineReady ? 'Ready ✓' : 'Not yet — open once with internet'))
     ),
     h('h3', { class: 'label' }, 'Templates'),
     h('div', { class: 'group' },
