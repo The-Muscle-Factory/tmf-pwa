@@ -76,3 +76,48 @@ export const MUSCLES = [
   'abdominals', 'abductors', 'adductors', 'biceps', 'calves', 'chest', 'forearms', 'glutes',
   'hamstrings', 'lats', 'lower back', 'middle back', 'neck', 'quadriceps', 'shoulders', 'traps', 'triceps',
 ];
+
+// ---- Movement families ----
+// Groups variations of the same movement ("Barbell Squat", "Goblet Squat", …)
+// for the recent-sets view. First match wins, so specific patterns come first.
+const FAMILIES = [
+  ['Leg curl', /leg curl|hamstring curl/],
+  ['Wrist curl', /wrist curl|forearm curl/],
+  ['Hammer curl', /hammer curl/],
+  ['Preacher curl', /preacher/],
+  ['Reverse curl', /reverse.*curl/],
+  ['Biceps curl', /curl/],
+  ['Leg extension', /leg extension/],
+  ['Triceps extension', /triceps? extension|skull ?crusher|french press/],
+  ['Triceps pushdown', /push-?down/],
+  ['Romanian deadlift', /romanian|stiff.?leg/],
+  ['Deadlift', /deadlift/],
+  ['Squat', /squat/],
+  ['Lunge', /lunge|split squat/],
+  ['Hip thrust', /hip thrust|glute bridge/],
+  ['Calf raise', /calf/],
+  ['Lateral raise', /lateral raise|side lateral/],
+  ['Front raise', /front raise/],
+  ['Rear delt', /rear delt|reverse fly|reverse flye/],
+  ['Chest fly', /\bfly|\bflye|butterfly|pec deck/],
+  ['Incline press', /incline.*(press|bench)/],
+  ['Decline press', /decline.*(press|bench)/],
+  ['Bench press', /bench press|chest press|floor press/],
+  ['Shoulder press', /shoulder press|military press|overhead press|arnold press/],
+  ['Lat pulldown', /pulldown|pull-down/],
+  ['Pull-up', /pull-?ups?\b|chin-?ups?\b/],
+  ['Row', /\brows?\b/],
+  ['Shrug', /shrug/],
+  ['Push-up', /push-?ups?\b/],
+  ['Dip', /\bdips?\b/],
+  ['Plank', /plank/],
+  ['Crunch / sit-up', /crunch|sit-?up/],
+];
+
+// { key, label } for an exercise entry ({ exId, name }). Exercises that match no
+// family form their own group.
+export function movementFamily({ exId, name }) {
+  const n = name.toLowerCase();
+  const fam = FAMILIES.find(([, re]) => re.test(n));
+  return fam ? { key: `family:${fam[0]}`, label: fam[0] } : { key: `id:${exId}`, label: name };
+}

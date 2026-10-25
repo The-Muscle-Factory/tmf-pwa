@@ -197,8 +197,11 @@ button { background: none; border: 0; padding: 0; cursor: pointer; }
 .toast {
   position: fixed; left: 50%; top: calc(env(safe-area-inset-top) + 16px); z-index: 30;
   transform: translate(-50%, -20px); opacity: 0; transition: 0.25s;
+  display: flex; align-items: center; gap: 14px; max-width: calc(100% - 32px);
   background: var(--card-2); padding: 10px 16px; border-radius: 999px; font-size: 14px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
 }
+.toast-action { color: var(--accent); font-weight: 700; padding: 2px 4px; }
 .toast.show { transform: translate(-50%, 0); opacity: 1; }
 .ok { color: var(--good); font-weight: 600; }
 
@@ -263,3 +266,60 @@ button { background: none; border: 0; padding: 0; cursor: pointer; }
 .info-steps { background: var(--card); border-radius: var(--radius); padding: 12px 14px; }
 .info-steps summary { font-weight: 600; cursor: pointer; }
 .info-steps li { margin: 8px 0; color: #cdd3de; }
+
+/* ---- Exercise list: swipe to delete, drag to reorder ---- */
+.ex-list { display: flex; flex-direction: column; gap: 12px; margin-bottom: 12px; }
+.swipe { position: relative; border-radius: var(--radius); }
+.swipe .ex-card { position: relative; margin-bottom: 0; touch-action: pan-y; }
+/* Links inside cards must not start a native drag or iOS link preview mid-swipe. */
+.swipe .ex-card a { -webkit-user-drag: none; -webkit-touch-callout: none; }
+.swipe-delete {
+  position: absolute; inset: 0; border-radius: var(--radius); visibility: hidden;
+  background: var(--danger); color: #fff; font-weight: 700;
+  display: flex; align-items: center; justify-content: flex-end; padding-right: 22px;
+}
+.swipe.swiping .swipe-delete { visibility: visible; }
+
+.ex-head { gap: 2px; }
+.ex-head .ex-name { flex: 1; min-width: 0; }
+.drag-handle {
+  width: 30px; height: 36px; margin-left: -6px; display: grid; place-items: center;
+  color: var(--muted); touch-action: none; cursor: grab;
+}
+.icon { display: inline-flex; }
+.recent-btn { color: var(--accent); }
+
+.ex-list.reordering .ex-card > :not(.ex-head) { display: none; }
+.ex-list.reordering .ex-card { padding-bottom: 12px; }
+.ex-list.reordering .swipe { transition: transform 0.15s ease; }
+.ex-list.reordering .swipe.dragging { transition: none; z-index: 5; }
+.swipe.dragging .ex-card { box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6); outline: 2px solid var(--accent); }
+
+/* ---- Couldn't do ---- */
+.ex-card.skipped { opacity: 0.7; padding-bottom: 12px; }
+.ex-card.skipped .ex-name { color: var(--muted); text-decoration: line-through; }
+.skip-note { color: #f5b971; font-size: 14px; margin: 2px 0 0 28px; }
+
+/* ---- Dialog ---- */
+.dialog-backdrop {
+  position: fixed; inset: 0; z-index: 40; background: rgba(0, 0, 0, 0.6);
+  display: flex; justify-content: center; align-items: flex-start; padding: calc(env(safe-area-inset-top) + 15vh) 20px 0;
+}
+.dialog { width: 100%; max-width: 380px; background: var(--card); border-radius: 16px; padding: 18px; animation: pop 0.15s ease-out; }
+@keyframes pop { from { transform: scale(0.95); opacity: 0; } }
+.dialog-title { font-size: 17px; font-weight: 700; margin-bottom: 6px; }
+.dialog-msg { color: #cdd3de; font-size: 15px; margin-bottom: 14px; }
+.dialog-input { width: 100%; margin-bottom: 14px; background: var(--card-2); border-color: transparent; -webkit-appearance: none; appearance: none; }
+.dialog-input:focus { border-color: var(--accent); }
+.dialog-btns { display: flex; gap: 10px; }
+.dialog-btns .btn { flex: 1; }
+.btn.danger-fill { background: var(--danger); color: #fff; }
+
+/* ---- Panel (recent sets) ---- */
+.panel { display: flex; flex-direction: column; padding-top: 4px; }
+.panel-head { display: flex; align-items: center; justify-content: space-between; padding: 6px 4px 8px; }
+.panel-title { font-weight: 700; }
+.panel-body { overflow-y: auto; }
+.recent-card { background: var(--card-2); border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; }
+.recent-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 8px; }
+.small-btn { padding: 7px 10px; font-size: 13px; white-space: nowrap; background: var(--card); color: var(--accent); }

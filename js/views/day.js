@@ -1,9 +1,14 @@
-import { h, debounce, toast, sheet, mount } from '../dom.js';
+import { h, debounce, toast, sheet, dialog, panel, svgIcon, mount } from '../dom.js';
 import * as store from '../store.js';
-import { DAY_TYPES, EQUIPMENT, RATIOS } from '../library.js';
+import { DAY_TYPES, EQUIPMENT, RATIOS, movementFamily } from '../library.js';
 import { weekStart, fullDate, addDays, weekdayLong } from '../dates.js';
 import { startTimer } from '../timer.js';
+import { swipeToDelete, dragToReorder } from '../gestures.js';
 import { pickExercise } from './picker.js';
+
+const HISTORY_ICON = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v4h4"/><path d="M12 7v5l3 2"/></svg>';
+const GRIP_ICON = '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>';
+const RECENT_DAYS = 21;
 
 export async function renderDay(root, { date }) {
   let day = await store.getDay(date);
@@ -28,6 +33,19 @@ export async function renderDay(root, { date }) {
     await refresh();
     draw();
   }
+
+  // Applies a destructive change and offers Undo for a few seconds.
+  function withUndo(message, change) {
+    const before = JSON.parse(JSON.stringify(day));
+    change();
+    commit();
+    toast(message, { action: { label: 'Undo', run: () => { day = before; commit(); } } });
+  }
+
+  const deleteExercise = (idx) => {
+    const { name } = day.exercises[idx];
+    withUndo(`Deleted ${name}`, () => day.exercises.splice(idx, 1));
+  };
 
   const fmtPrev = (ex, s) => {
     if (!s || !store.hasData(s)) return '—';
@@ -69,6 +87,35 @@ export async function renderDay(root, { date }) {
   }
 
   // ---- Exercise card ----
+  // Each card sits in a wrapper with a Delete button behind it (swipe left).
+  function exerciseItem(ex, idx) {
+    const card = ex.skipped ? skippedCard(ex, idx) : exerciseCard(ex, idx);
+    const wrap = h('div', { class: 'swipe' },
+      h('button', { class: 'swipe-delete', onclick: () => deleteExercise(idx) }, 'Delete'),
+      card);
+    swipeToDelete(wrap, card, () => deleteExercise(idx));
+    return wrap;
+  }
+
+  const exHead = (ex, idx, ...extra) =>
+    h(
+      'div',
+      { class: 'ex-head' },
+      h('button', { class: 'drag-handle', 'aria-label': 'Drag to reorder' }, svgIcon(GRIP_ICON)),
+      h('a', { class: 'ex-name', href: `#/exercise/${encodeURIComponent(ex.exId)}`, draggable: 'false' }, ex.name),
+      extra,
+      h('button', { class: 'icon-btn small', 'aria-label': 'Exercise options', onclick: () => exerciseMenu(idx) }, '⋯')
+    );
+
+  function skippedCard(ex, idx) {
+    return h(
+      'section',
+      { class: 'ex-card skipped' },
+      exHead(ex, idx),
+      h('div', { class: 'skip-note' }, h('b', null, 'Couldn’t do'), ex.skipped.note ? ` · ${ex.skipped.note}` : '')
+    );
+  }
+
   function exerciseCard(ex, idx) {
     const prev = previous[store.variantKey(ex)];
     const cardio = store.isCardio(ex);
@@ -81,12 +128,8 @@ export async function renderDay(root, { date }) {
     return h(
       'section',
       { class: 'ex-card' },
-      h(
-        'div',
-        { class: 'ex-head' },
-        h('a', { class: 'ex-name', href: `#/exercise/${encodeURIComponent(ex.exId)}` }, ex.name),
-        h('button', { class: 'icon-btn small', 'aria-label': 'Exercise options', onclick: () => exerciseMenu(idx) }, '⋯')
-      ),
+      exHead(ex, idx,
+        h('button', { class: 'icon-btn small recent-btn', 'aria-label': 'Recent sets', onclick: () => recentSets(ex) }, svgIcon(HISTORY_ICON))),
       h(
         'div',
         { class: 'ex-setup' },
@@ -185,14 +228,22 @@ export async function renderDay(root, { date }) {
 
   async function exerciseMenu(idx) {
     const ex = day.exercises[idx];
-    const choice = await sheet(ex.name, [
-      { label: 'Info & history', value: 'info' },
-      { label: 'Replace exercise', value: 'replace' },
-      idx > 0 && { label: 'Move up', value: 'up' },
-      idx < day.exercises.length - 1 && { label: 'Move down', value: 'down' },
-      { label: 'Delete exercise', value: 'delete', danger: true },
-    ].filter(Boolean));
+    const choice = await sheet(ex.name, ex.skipped
+      ? [
+          { label: 'Undo “Couldn’t do”', value: 'unskip' },
+          { label: 'Edit note', value: 'skip' },
+          { label: 'Info & history', value: 'info' },
+          { label: 'Delete exercise', value: 'delete', danger: true },
+        ]
+      : [
+          { label: 'Recent sets (last 3 weeks)', value: 'recent' },
+          { label: 'Info & history', value: 'info' },
+          { label: 'Replace exercise', value: 'replace' },
+          { label: 'Couldn’t do…', value: 'skip' },
+          { label: 'Delete exercise', value: 'delete', danger: true },
+        ]);
     if (choice === 'info') location.hash = `#/exercise/${encodeURIComponent(ex.exId)}`;
+    else if (choice === 'recent') recentSets(ex);
     else if (choice === 'replace') {
       const picked = await pickExercise();
       if (picked) {
@@ -200,14 +251,64 @@ export async function renderDay(root, { date }) {
         Object.assign(ex, { exId: picked.exId, name: picked.name, ...setup });
         commit();
       }
-    } else if (choice === 'up' || choice === 'down') {
-      const j = choice === 'up' ? idx - 1 : idx + 1;
-      [day.exercises[idx], day.exercises[j]] = [day.exercises[j], day.exercises[idx]];
+    } else if (choice === 'skip') {
+      const note = await dialog({
+        title: `Couldn’t do ${ex.name}`,
+        message: 'What got in the way? (optional)',
+        input: { placeholder: 'e.g. ran out of time, shoulder pain', value: ex.skipped?.note },
+        confirmLabel: 'Save',
+      });
+      if (note != null) {
+        ex.skipped = { note };
+        commit();
+      }
+    } else if (choice === 'unskip') {
+      delete ex.skipped;
       commit();
-    } else if (choice === 'delete' && confirm(`Delete ${ex.name}?`)) {
-      day.exercises.splice(idx, 1);
+    } else if (choice === 'delete') deleteExercise(idx);
+  }
+
+  // Sets from the last 3 weeks of any variation of this movement (all squats,
+  // any equipment), each with a button to copy them into today's exercise.
+  async function recentSets(ex) {
+    const family = movementFamily(ex);
+    const list = await store.familySessions(ex, addDays(date, -RECENT_DAYS), date);
+    const setup = (e) => (e.equipment === 'Cable' ? `Cable ${e.ratio}` : e.equipment);
+    const setText = (e, st) =>
+      store.isCardio(e)
+        ? [st.min != null && `${store.fmtNum(st.min)} min`, st.km != null && `${store.fmtNum(st.km)} km`].filter(Boolean).join(' · ') || '✓'
+        : `${st.weight != null ? `${store.fmtNum(st.weight)} ${e.unit}` : 'BW'} × ${st.reps || '?'}`;
+
+    const use = async (src) => {
+      if (ex.sets.some((st) => st.done) && !(await dialog({
+        title: 'Replace today’s sets?',
+        message: `${ex.name} already has ticked sets. They’ll be replaced with the sets from ${fullDate(src.date)}.`,
+        confirmLabel: 'Replace', danger: true,
+      }))) return;
+      // Today's card becomes that session's exercise and setup, so the numbers make sense.
+      Object.assign(ex, {
+        exId: src.ex.exId, name: src.ex.name, equipment: src.ex.equipment, ratio: src.ex.ratio, unit: src.ex.unit,
+        sets: src.ex.sets.filter(store.hasData).map((st) => ({ ...store.newSet(), weight: st.weight ?? null, reps: st.reps ?? '', min: st.min ?? null, km: st.km ?? null, note: st.note ?? '' })),
+      });
+      close();
       commit();
-    }
+      toast(`Copied ${ex.sets.length} sets from ${fullDate(src.date)}`);
+    };
+
+    const close = panel(
+      `${family.label} · last 3 weeks`,
+      list.length
+        ? list.map((src) =>
+            h('div', { class: 'recent-card' },
+              h('div', { class: 'recent-head' },
+                h('div', null,
+                  h('b', null, fullDate(src.date)), src.title ? h('span', { class: 'muted' }, ` · ${src.title}`) : null,
+                  h('div', { class: 'muted small' }, `${src.ex.name} · ${setup(src.ex)}`)),
+                h('button', { class: 'btn secondary small-btn', onclick: () => use(src) }, 'Use these sets')),
+              h('div', { class: 'chips' },
+                src.ex.sets.filter(store.hasData).map((st) => h('span', { class: `chip ${st.done ? '' : 'faded'}` }, setText(src.ex, st))))))
+        : h('p', { class: 'empty' }, `No ${family.label.toLowerCase()} sets in the last 3 weeks.`)
+    );
   }
 
   // Equipment/ratio/unit: what you used last time, else the dataset's equipment and default unit.
@@ -226,7 +327,7 @@ export async function renderDay(root, { date }) {
     if (!picked) return;
     day.exercises.push(store.newExercise({ ...picked, ...(await defaults(picked)) }));
     await commit();
-    root.querySelector('.ex-card:last-of-type')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    root.querySelector('.ex-list > .swipe:last-child')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
   }
 
   async function dayMenu() {
@@ -234,19 +335,44 @@ export async function renderDay(root, { date }) {
     const choice = await sheet('Workout', [
       ...templates.map((t) => ({ label: `📋 Load template: ${t.name}`, value: { tpl: t } })),
       { label: 'Save as template', value: { save: true } },
-    ]);
+      !store.isEmptyDay(day) && { label: 'Clear workout', value: { clear: true }, danger: true },
+    ].filter(Boolean));
     if (!choice) return;
     if (choice.tpl) {
       day = store.applyTemplate(choice.tpl, day);
       if (!day.title) { day.type = DAY_TYPES.includes(choice.tpl.name) ? choice.tpl.name : 'Custom'; day.title = choice.tpl.name; }
       commit();
-    } else {
+    } else if (choice.save) {
       if (!day.exercises.length) return toast('Add exercises first');
-      const name = prompt('Template name', day.title || '')?.trim();
+      const name = await dialog({ title: 'Save as template', input: { placeholder: 'Template name', value: day.title }, confirmLabel: 'Save' });
       if (!name) return;
       await store.saveTemplateFromDay(name, day);
       toast(`Saved template "${name}"`);
+    } else if (choice.clear) {
+      const n = day.exercises.length;
+      const parts = [day.title && `the workout type (${day.title})`, n && `${n} exercise${n === 1 ? '' : 's'}`, day.notes.trim() && 'your notes'].filter(Boolean);
+      const ok = await dialog({
+        title: 'Clear this workout?',
+        message: `This removes ${parts.join(', ').replace(/, ([^,]*)$/, ' and $1')} for ${fullDate(date)}.`,
+        confirmLabel: 'Clear workout',
+        danger: true,
+      });
+      if (ok) withUndo('Workout cleared', () => { day = store.emptyDay(date); });
     }
+  }
+
+  function exerciseList() {
+    const list = h('div', { class: 'ex-list' }, day.exercises.map(exerciseItem));
+    dragToReorder(list, {
+      item: '.swipe',
+      handle: '.drag-handle',
+      onDrop: (from, to) => {
+        const [moved] = day.exercises.splice(from, 1);
+        day.exercises.splice(to, 0, moved);
+        commit();
+      },
+    });
+    return list;
   }
 
   function draw() {
@@ -261,13 +387,13 @@ export async function renderDay(root, { date }) {
         h('div', { class: 'topbar-title' }, h('div', null, weekdayLong(date)), h('div', { class: 'sub' }, fullDate(date))),
         h('button', { class: 'icon-btn', 'aria-label': 'Next day', onclick: () => (location.hash = `#/day/${addDays(date, 1)}`) }, '›')
       ),
-      h('div', { class: 'type-wrap' }, typeSection(), h('button', { class: 'icon-btn small', 'aria-label': 'Templates', onclick: dayMenu }, '⋯')),
+      h('div', { class: 'type-wrap' }, typeSection(), h('button', { class: 'icon-btn small', 'aria-label': 'Workout options', onclick: dayMenu }, '⋯')),
       lastSame && !rest
         ? h('button', { class: 'btn secondary wide', onclick: () => { day = store.repeatExercises(lastSame, day); commit(); } },
             `↺ Repeat last ${day.title} (${fullDate(lastSame.date)})`)
         : null,
       rest ? h('p', { class: 'empty' }, 'Rest day. Recover well 💤') : null,
-      day.exercises.map(exerciseCard),
+      exerciseList(),
       rest ? null : h('button', { class: 'btn primary wide add-ex-btn', onclick: addExercise }, '+ Add exercise'),
       h('label', { class: 'label' }, 'Notes'),
       h('textarea', {

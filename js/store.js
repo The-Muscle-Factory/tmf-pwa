@@ -8,10 +8,12 @@
 //     unit: 'kg'|'lbs', sets: [Set] }
 // Set: strength { weight: number|null (in the exercise's unit), reps: string, done }
 //      cardio   { min: number|null, km: number|null, note: string, done }
-// An exercise is cardio when its equipment is 'Cardio'.
+// An exercise is cardio when its equipment is 'Cardio'. An exercise you planned
+// but couldn't do has `skipped: { note }`; older data simply lacks the field.
+// Skipped exercises never count as a session.
 import * as db from './db.js';
 import { weekDays } from './dates.js';
-import { loadLibrary } from './library.js';
+import { loadLibrary, movementFamily } from './library.js';
 import { upgradeDay, upgradeTemplate } from './legacy.js';
 
 export const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
@@ -71,7 +73,7 @@ async function sessions(match, before) {
   for (const day of await allDaysDesc()) {
     if (before && day.date >= before) continue;
     for (const ex of day.exercises) {
-      if (match(ex) && ex.sets.some(hasData)) out.push({ date: day.date, title: day.title, ex });
+      if (!ex.skipped && match(ex) && ex.sets.some(hasData)) out.push({ date: day.date, title: day.title, ex });
     }
   }
   return out;
@@ -82,6 +84,13 @@ export const historyFor = (exId) => sessions((e) => e.exId === exId);
 export async function lastSession(ex, beforeDate) {
   const key = variantKey(ex);
   return (await sessions((e) => variantKey(e) === key, beforeDate))[0] || null;
+}
+
+// Sessions of any variation of the same movement (e.g. every squat), on
+// dates from `since` up to but not including `before`.
+export async function familySessions(ex, since, before) {
+  const { key } = movementFamily(ex);
+  return (await sessions((e) => movementFamily(e).key === key, before)).filter((s) => s.date >= since);
 }
 
 // Equipment/ratio/unit you used last time for this exercise, to preselect them.
@@ -98,6 +107,7 @@ export async function recentExercises() {
   const seen = new Map();
   for (const day of await allDaysDesc()) {
     for (const ex of day.exercises) {
+      if (ex.skipped) continue;
       const s = seen.get(ex.exId);
       if (s) s.count++;
       else seen.set(ex.exId, { exId: ex.exId, name: ex.name, equipment: ex.equipment, last: day.date, count: 1 });
