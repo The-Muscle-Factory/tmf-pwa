@@ -11,6 +11,10 @@ A personal workout log you install on your iPhone as a PWA. Plain HTML/CSS/JS wi
   - Sets are rows of weight + reps (reps accept things like `7+3`). Cardio sets record minutes, km and a note.
 - **Repeat last workout**: after choosing a type, one tap adds the exercises from your last workout of that type.
 - **PREVIOUS column** (like Hevy): shows last time's numbers for the same exercise, equipment and ratio. Tap it to copy, or tick ✓ to fill blanks from it.
+- **Recent sets** (clock icon on each exercise): every session of that movement (e.g. all squat variations, any equipment) from the last 3 weeks, each with **Use these sets** to copy it into today.
+- **Gestures**: swipe an exercise left to delete it (with Undo), and drag the ⠿ handle to reorder.
+- **Couldn't do**: mark a planned exercise as skipped with a short note (⋯ menu). It stays on the day but never counts as a session.
+- **Clear workout** from the ⋯ next to the workout type, with a confirm and Undo.
 - **Rest timer** starts when you tick a set.
 - **Exercise pages**: muscles, photos, how-to steps, and your history grouped by equipment/ratio, with heaviest set and estimated 1RM.
 - **Templates**, day **notes**, a default-unit setting, and **export / import** (merge or replace) of a JSON backup.
@@ -37,6 +41,7 @@ js/legacy.js   upgrades old saved data     │ moving to React + Vite
 js/dates.js    date helpers                ┘
 js/dom.js      h() element helper, sheet, toast
 js/timer.js    rest timer
+js/gestures.js swipe-to-delete, drag-to-reorder
 js/views/*.js  screens (week, day, exercise picker/info, history, settings)
 data/exercises.json  exercise library (rebuild: python3 tools/build-exercises.py)
 js/app.js      hash router + boot

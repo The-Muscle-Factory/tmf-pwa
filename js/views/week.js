@@ -13,7 +13,7 @@ export async function renderWeek(root, { date }) {
   const range = `${dayMonth(start)} – ${dayMonth(end)}${sameYear ? '' : ` ${fromISO(end).getFullYear()}`}`;
 
   const workouts = days.filter((d) => d.exercises.length).length;
-  const totalSets = days.reduce((n, d) => n + d.exercises.reduce((m, e) => m + e.sets.filter((s) => s.done).length, 0), 0);
+  const totalSets = days.reduce((n, d) => n + d.exercises.reduce((m, e) => m + (e.skipped ? 0 : e.sets.filter((s) => s.done).length), 0), 0);
 
   mount(root,
     h(
@@ -38,8 +38,10 @@ export async function renderWeek(root, { date }) {
       'div',
       { class: 'day-list' },
       days.map((d) => {
-        const doneSets = d.exercises.reduce((n, e) => n + e.sets.filter((s) => s.done).length, 0);
-        const allSets = d.exercises.reduce((n, e) => n + e.sets.length, 0);
+        const done = d.exercises.filter((e) => !e.skipped);
+        const skipped = d.exercises.length - done.length;
+        const doneSets = done.reduce((n, e) => n + e.sets.filter((s) => s.done).length, 0);
+        const allSets = done.reduce((n, e) => n + e.sets.length, 0);
         return h(
           'a',
           { class: `day-card ${d.date === today ? 'today' : ''} ${d.exercises.length ? 'logged' : ''}`, href: `#/day/${d.date}` },
@@ -49,7 +51,7 @@ export async function renderWeek(root, { date }) {
             { class: 'day-body' },
             h('div', { class: 'day-title' }, d.title || (d.exercises.length ? 'Workout' : 'No workout logged')),
             d.exercises.length
-              ? h('div', { class: 'day-meta' }, `${d.exercises.length} exercises · ${doneSets}/${allSets} sets`)
+              ? h('div', { class: 'day-meta' }, `${d.exercises.length} exercises · ${doneSets}/${allSets} sets${skipped ? ` · ${skipped} skipped` : ''}`)
               : d.notes
                 ? h('div', { class: 'day-meta' }, d.notes.slice(0, 60))
                 : null

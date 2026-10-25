@@ -35,14 +35,81 @@ export function debounce(fn, ms) {
   return wrapped;
 }
 
-export function toast(msg) {
-  const el = h('div', { class: 'toast' }, msg);
-  document.body.append(el);
-  setTimeout(() => el.classList.add('show'), 10);
-  setTimeout(() => {
+// Short message at the top of the screen. With `action`, shows a button
+// (e.g. Undo) and stays a little longer.
+export function toast(msg, { action } = {}) {
+  document.querySelector('.toast')?.remove();
+  const el = h(
+    'div',
+    { class: 'toast' },
+    h('span', null, msg),
+    action ? h('button', { class: 'toast-action', onclick: () => { hide(); action.run(); } }, action.label) : null
+  );
+  const hide = () => {
     el.classList.remove('show');
     setTimeout(() => el.remove(), 300);
-  }, 2000);
+  };
+  document.body.append(el);
+  setTimeout(() => el.classList.add('show'), 10);
+  setTimeout(hide, action ? 5000 : 2000);
+}
+
+// Centered dialog. With `input`, resolves with the typed text (possibly '') or
+// null on cancel; otherwise resolves true/false.
+export function dialog({ title, message, input, confirmLabel = 'OK', danger = false }) {
+  return new Promise((resolve) => {
+    const field = input
+      ? h('input', { class: 'text dialog-input', type: 'text', placeholder: input.placeholder || '', value: input.value || '', enterkeyhint: 'done',
+          onkeydown: (e) => e.key === 'Enter' && close(true) })
+      : null;
+    const close = (ok) => {
+      backdrop.remove();
+      resolve(input ? (ok ? field.value.trim() : null) : ok);
+    };
+    const backdrop = h(
+      'div',
+      { class: 'dialog-backdrop', onclick: (e) => e.target === backdrop && close(false) },
+      h(
+        'div',
+        { class: 'dialog', role: 'dialog', 'aria-modal': 'true' },
+        h('div', { class: 'dialog-title' }, title),
+        message ? h('div', { class: 'dialog-msg' }, message) : null,
+        field,
+        h(
+          'div',
+          { class: 'dialog-btns' },
+          h('button', { class: 'btn secondary', onclick: () => close(false) }, 'Cancel'),
+          h('button', { class: `btn ${danger ? 'danger-fill' : 'primary'}`, onclick: () => close(true) }, confirmLabel)
+        )
+      )
+    );
+    document.body.append(backdrop);
+    field?.focus();
+  });
+}
+
+// Bottom panel with arbitrary content. Returns a function that closes it.
+export function panel(title, ...content) {
+  const close = () => backdrop.remove();
+  const backdrop = h(
+    'div',
+    { class: 'sheet-backdrop', onclick: (e) => e.target === backdrop && close() },
+    h(
+      'div',
+      { class: 'sheet panel' },
+      h('div', { class: 'panel-head' }, h('div', { class: 'panel-title' }, title), h('button', { class: 'btn ghost', onclick: close }, 'Close')),
+      h('div', { class: 'panel-body' }, content)
+    )
+  );
+  document.body.append(backdrop);
+  return close;
+}
+
+// Inline SVG (h() only creates HTML elements).
+export function svgIcon(markup, cls = 'icon') {
+  const span = h('span', { class: cls, 'aria-hidden': 'true' });
+  span.innerHTML = markup;
+  return span;
 }
 
 // Bottom sheet with a list of choices. Resolves with the chosen value or null.
