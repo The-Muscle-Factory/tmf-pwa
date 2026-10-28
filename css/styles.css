@@ -290,9 +290,11 @@ button { background: none; border: 0; padding: 0; cursor: pointer; }
 .ex-head { gap: 2px; }
 .ex-head .ex-name { flex: 1; min-width: 0; }
 .drag-handle {
-  width: 30px; height: 36px; margin-left: -6px; display: grid; place-items: center;
+  width: 36px; height: 44px; margin: -4px 0 -4px -10px; display: grid; place-items: center;
   color: var(--muted); touch-action: none; cursor: grab;
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
 }
+.drag-handle .icon { pointer-events: none; } /* the handle itself always gets the touch */
 .icon { display: inline-flex; }
 .recent-btn { color: var(--accent); }
 
