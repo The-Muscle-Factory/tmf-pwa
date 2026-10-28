@@ -61,7 +61,8 @@ export async function renderExercise(root, { exId }) {
     if (!cardio) {
       for (const { ex } of list) {
         for (const s of ex.sets) {
-          if (s.weight == null) continue;
+          // Drop sets log only the starting weight, so their reps would overstate strength.
+          if (s.weight == null || s.drop) continue;
           const kg = store.toKg(s.weight, ex.unit);
           const reps = store.repsTotal(s.reps);
           if (!best || kg > best.kg || (kg === best.kg && reps > best.reps)) best = { kg, reps };
@@ -69,10 +70,6 @@ export async function renderExercise(root, { exId }) {
         }
       }
     }
-    const setText = (ex, s) =>
-      cardio
-        ? [s.min != null && `${store.fmtNum(s.min)} min`, s.km != null && `${store.fmtNum(s.km)} km`, s.note].filter(Boolean).join(' · ')
-        : `${s.weight != null ? `${store.fmtNum(s.weight)} ${ex.unit}` : 'BW'} × ${s.reps || '?'}`;
     return [
       h('h3', { class: 'label' }, `${label} · ${list.length} sessions`),
       best
@@ -84,7 +81,7 @@ export async function renderExercise(root, { exId }) {
         h('a', { class: 'hist-card', href: `#/day/${date}` },
           h('div', { class: 'hist-head' }, h('b', null, fullDate(date)), title ? h('span', { class: 'muted' }, title) : null),
           h('div', { class: 'chips' },
-            ex.sets.filter(store.hasData).map((s) => h('span', { class: `chip ${s.done ? '' : 'faded'}` }, setText(ex, s))))))
+            ex.sets.filter(store.hasData).map((s) => h('span', { class: `chip ${s.done ? '' : 'faded'} ${s.drop ? 'drop' : ''}` }, store.setLabel(ex, s, { withNote: true }))))))
     ];
   }
 

@@ -1,7 +1,7 @@
 {
   "name": "TMF Workout Tracker",
   "short_name": "TMF",
-  "description": "Personal weekly workout log",
+  "description": "Free, offline workout tracker. Log sets, reps and weights against 870+ exercises. No account, and your data stays on your device.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
@@ -9,8 +9,50 @@
   "background_color": "#0f1115",
   "theme_color": "#0f1115",
   "icons": [
-    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
-    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "categories": [
+    "health",
+    "fitness",
+    "sports",
+    "lifestyle"
+  ],
+  "screenshots": [
+    {
+      "src": "docs/screenshots/day.png",
+      "sizes": "828x1792",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Log a workout"
+    },
+    {
+      "src": "docs/screenshots/week.png",
+      "sizes": "828x1792",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Your week at a glance"
+    },
+    {
+      "src": "docs/screenshots/history.png",
+      "sizes": "828x1792",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Exercise history and progress"
+    }
   ]
 }

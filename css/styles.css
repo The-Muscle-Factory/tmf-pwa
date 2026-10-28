@@ -120,6 +120,13 @@ button { background: none; border: 0; padding: 0; cursor: pointer; }
 }
 .check.on { background: var(--good); color: #fff; }
 
+.text {
+  flex: 1; min-width: 0; height: 46px; padding: 0 12px;
+  background: var(--card); border: 1px solid var(--border); border-radius: 10px; outline: 0; font-size: 16px;
+  -webkit-appearance: none; appearance: none;
+}
+.text:focus { border-color: var(--accent); }
+
 .label { display: block; color: var(--muted); font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin: 18px 0 8px; }
 .notes {
   width: 100%; padding: 12px; background: var(--card); border: 1px solid var(--border);
@@ -262,7 +269,7 @@ button { background: none; border: 0; padding: 0; cursor: pointer; }
 .info .chips { margin: 4px 0 12px; }
 .chip.muscle { background: var(--good-soft); color: #a7f3c4; }
 .info-images { display: flex; gap: 8px; overflow-x: auto; margin-bottom: 12px; }
-.info-images img { width: 48%; min-width: 150px; border-radius: 10px; background: #fff; }
+.info-images img { width: 48%; min-width: 150px; aspect-ratio: 3 / 2; object-fit: cover; border-radius: 10px; background: var(--card-2); }
 .info-steps { background: var(--card); border-radius: var(--radius); padding: 12px 14px; }
 .info-steps summary { font-weight: 600; cursor: pointer; }
 .info-steps li { margin: 8px 0; color: #cdd3de; }
@@ -322,4 +329,13 @@ button { background: none; border: 0; padding: 0; cursor: pointer; }
 .panel-body { overflow-y: auto; }
 .recent-card { background: var(--card-2); border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; }
 .recent-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 8px; }
-.small-btn { padding: 7px 10px; font-size: 13px; white-space: nowrap; background: var(--card); color: var(--accent); }
+.btn.small-btn { padding: 7px 10px; font-size: 13px; white-space: nowrap; background: var(--card); color: var(--accent); }
+
+/* ---- Drop sets / skipped last time ---- */
+.set-row.drop .set-num { color: #f59e0b; }
+.chip.drop { background: rgba(245, 158, 11, 0.16); color: #fcd34d; }
+.skipped-tag {
+  display: inline-block; margin: 4px 0 2px; padding: 3px 10px; border-radius: 999px;
+  background: rgba(245, 158, 11, 0.14); color: #f5b971; font-size: 12px; font-weight: 600;
+}
+.skipped-tag span { font-weight: 400; }

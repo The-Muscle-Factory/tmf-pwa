@@ -9,8 +9,10 @@
 // Set: strength { weight: number|null (in the exercise's unit), reps: string, done }
 //      cardio   { min: number|null, km: number|null, note: string, done }
 // An exercise is cardio when its equipment is 'Cardio'. An exercise you planned
-// but couldn't do has `skipped: { note }`; older data simply lacks the field.
-// Skipped exercises never count as a session.
+// but couldn't do has `skipped: { note }`; one brought back by "Repeat last"
+// after being skipped has `skippedBefore: { date, note }`. A drop set has
+// `drop: true` and records only its starting weight. Older data simply lacks
+// these optional fields. Skipped exercises never count as a session.
 import * as db from './db.js';
 import { weekDays } from './dates.js';
 import { loadLibrary, movementFamily } from './library.js';
@@ -22,7 +24,8 @@ export const emptyDay = (date) => ({ v: 2, date, type: '', title: '', notes: '',
 export const isCardio = (ex) => ex.equipment === 'Cardio';
 export const variantKey = (ex) => `${ex.exId}|${ex.equipment}|${ex.equipment === 'Cable' ? ex.ratio || '1:1' : ''}`;
 
-export const newSet = (prev) => ({ weight: prev?.weight ?? null, reps: '', min: null, km: null, note: '', done: false });
+export const newSet = (prev, { drop = false } = {}) =>
+  ({ weight: prev?.weight ?? null, reps: '', min: null, km: null, note: '', done: false, ...(drop ? { drop: true } : {}) });
 
 export const hasData = (s) =>
   s.weight != null || !!String(s.reps ?? '').trim() || s.min != null || s.km != null || !!s.note?.trim();
@@ -124,8 +127,16 @@ export async function previousSameWorkout(day) {
 }
 
 // Appends another day's exercises with one empty set each; PREVIOUS shows the old numbers.
+// Exercises skipped last time are flagged so the card can say so; a first set
+// that was a drop set starts as one again.
 export function repeatExercises(source, day) {
-  return { ...day, exercises: [...day.exercises, ...source.exercises.map((e) => newExercise(e))] };
+  const copies = source.exercises.map((e) => {
+    const ex = newExercise(e);
+    if (e.sets?.[0]?.drop) ex.sets[0].drop = true;
+    if (e.skipped) ex.skippedBefore = { date: source.date, note: e.skipped.note || '' };
+    return ex;
+  });
+  return { ...day, exercises: [...day.exercises, ...copies] };
 }
 
 // ---- Templates ----
@@ -171,6 +182,16 @@ export const parseNum = (v) => {
   const n = parseFloat(String(v).replace(',', '.'));
   return Number.isNaN(n) ? null : n;
 };
+// Text for one logged set, e.g. "60 kg × 8", "10 kg × 8+6 · drop", "20 min · 3 km".
+export function setLabel(ex, s, { withNote = false } = {}) {
+  if (isCardio(ex)) {
+    return [s.min != null && `${fmtNum(s.min)} min`, s.km != null && `${fmtNum(s.km)} km`, withNote && s.note]
+      .filter(Boolean).join(' · ') || '✓';
+  }
+  const text = `${s.weight != null ? `${fmtNum(s.weight)} ${ex.unit}` : 'BW'} × ${s.reps || '?'}`;
+  return s.drop ? `${text} · drop` : text;
+}
+
 // "7+3" -> 10
 export const repsTotal = (reps) => (String(reps ?? '').match(/\d+/g) || []).reduce((a, b) => a + Number(b), 0);
 
