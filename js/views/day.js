@@ -53,7 +53,8 @@ export async function renderDay(root, { date }) {
       return [s.min != null && `${store.fmtNum(s.min)}′`, s.km != null && `${store.fmtNum(s.km)}km`].filter(Boolean).join(' ') || '✓';
     }
     const w = s.weight != null ? `${store.fmtNum(s.weight)}${ex.unit}` : 'BW';
-    return s.reps ? `${w} × ${s.reps}` : w;
+    const text = s.reps ? `${w} × ${s.reps}` : w;
+    return s.drop ? `D ${text}` : text;
   };
 
   // ---- Workout type ----
@@ -144,6 +145,9 @@ export async function renderDay(root, { date }) {
           : h('div', { class: 'seg' }, ['kg', 'lbs'].map((u) =>
               h('button', { class: u === ex.unit ? 'on' : '', onclick: () => ex.unit !== u && setup({ unit: u }) }, u)))
       ),
+      ex.skippedBefore
+        ? h('div', { class: 'skipped-tag' }, 'Skipped last time', ex.skippedBefore.note ? h('span', null, ` · ${ex.skippedBefore.note}`) : null)
+        : null,
       prev ? h('div', { class: 'ex-last' }, `Last: ${fullDate(prev.date)}`) : null,
       h(
         'div',
@@ -151,15 +155,25 @@ export async function renderDay(root, { date }) {
         h('div', { class: 'set-row head' },
           h('span', null, 'SET'), h('span', null, 'PREVIOUS'),
           h('span', null, cardio ? 'MIN' : ex.unit.toUpperCase()), h('span', null, cardio ? 'KM' : 'REPS'), h('span', null, '✓')),
-        ex.sets.map((s, si) => setRow(ex, s, si, prev?.ex.sets[si]))
+        ex.sets.map((s, si) => setRow(ex, s, si, prev?.ex.sets[si], setNumber(ex, si)))
       ),
-      h('button', { class: 'btn ghost add-set', onclick: () => { ex.sets.push(store.newSet(ex.sets[ex.sets.length - 1])); commit(); } }, '+ Add set')
+      h('button', {
+        class: 'btn ghost add-set',
+        onclick: () => {
+          const drop = !!prev?.ex.sets[ex.sets.length]?.drop;
+          ex.sets.push(store.newSet(ex.sets[ex.sets.length - 1], { drop }));
+          commit();
+        },
+      }, '+ Add set')
     );
   }
 
-  function setRow(ex, s, si, prevSet) {
+  // Working sets are numbered 1, 2, 3…; drop sets show "D" and don't take a number.
+  const setNumber = (ex, si) => (ex.sets[si].drop ? 'D' : ex.sets.slice(0, si + 1).filter((s) => !s.drop).length);
+
+  function setRow(ex, s, si, prevSet, label) {
     const cardio = store.isCardio(ex);
-    const row = h('div', { class: `set-row ${s.done ? 'done' : ''}` });
+    const row = h('div', { class: `set-row ${s.done ? 'done' : ''} ${s.drop ? 'drop' : ''}` });
     const numInput = (field, mode, placeholder) =>
       h('input', {
         class: 'num', type: 'text', inputmode: mode, placeholder: placeholder ?? '', value: store.fmtNum(s[field]),
@@ -171,7 +185,7 @@ export async function renderDay(root, { date }) {
       a = numInput('min', 'decimal', store.fmtNum(prevSet?.min) || '0');
       b = numInput('km', 'decimal', store.fmtNum(prevSet?.km) || '0');
     } else {
-      a = numInput('weight', 'decimal', store.fmtNum(prevSet?.weight) || '0');
+      a = numInput('weight', 'decimal', store.fmtNum(prevSet?.weight) || (s.drop ? 'start' : '0'));
       // Text so "7+3" works; the phone keypad has a + key.
       b = h('input', {
         class: 'num', type: 'text', inputmode: 'tel', placeholder: prevSet?.reps || '0', value: s.reps ?? '',
@@ -192,7 +206,7 @@ export async function renderDay(root, { date }) {
     };
 
     row.append(
-      h('button', { class: 'set-num', 'aria-label': `Set ${si + 1} options`, onclick: () => setMenu(ex, si) }, si + 1),
+      h('button', { class: 'set-num', 'aria-label': `Set ${label} options`, onclick: () => setMenu(ex, si, label) }, label),
       h('button', { class: 'prev', title: 'Copy previous', onclick: () => prevSet && fill(prevSet, true) }, fmtPrev(ex, prevSet)),
       a,
       b,
@@ -218,12 +232,20 @@ export async function renderDay(root, { date }) {
     return note ? h('div', { class: 'set-wrap' }, row, note) : row;
   }
 
-  async function setMenu(ex, si) {
-    const choice = await sheet(`${ex.name} · Set ${si + 1}`, [{ label: `Delete set ${si + 1}`, value: 'delete', danger: true }]);
-    if (choice === 'delete') {
-      ex.sets.splice(si, 1);
-      commit();
-    }
+  async function setMenu(ex, si, label) {
+    const s = ex.sets[si];
+    const name = s.drop ? 'drop set' : `set ${label}`;
+    const choice = await sheet(`${ex.name} · ${s.drop ? 'Drop set' : `Set ${label}`}`, [
+      !store.isCardio(ex) && (s.drop
+        ? { label: 'Make it a normal set', value: 'undrop' }
+        : { label: 'Mark as drop set (log the starting weight)', value: 'drop' }),
+      { label: `Delete ${name}`, value: 'delete', danger: true },
+    ].filter(Boolean));
+    if (choice === 'delete') ex.sets.splice(si, 1);
+    else if (choice === 'drop') s.drop = true;
+    else if (choice === 'undrop') delete s.drop;
+    else return;
+    commit();
   }
 
   async function exerciseMenu(idx) {
@@ -274,10 +296,6 @@ export async function renderDay(root, { date }) {
     const family = movementFamily(ex);
     const list = await store.familySessions(ex, addDays(date, -RECENT_DAYS), date);
     const setup = (e) => (e.equipment === 'Cable' ? `Cable ${e.ratio}` : e.equipment);
-    const setText = (e, st) =>
-      store.isCardio(e)
-        ? [st.min != null && `${store.fmtNum(st.min)} min`, st.km != null && `${store.fmtNum(st.km)} km`].filter(Boolean).join(' · ') || '✓'
-        : `${st.weight != null ? `${store.fmtNum(st.weight)} ${e.unit}` : 'BW'} × ${st.reps || '?'}`;
 
     const use = async (src) => {
       if (ex.sets.some((st) => st.done) && !(await dialog({
@@ -288,7 +306,10 @@ export async function renderDay(root, { date }) {
       // Today's card becomes that session's exercise and setup, so the numbers make sense.
       Object.assign(ex, {
         exId: src.ex.exId, name: src.ex.name, equipment: src.ex.equipment, ratio: src.ex.ratio, unit: src.ex.unit,
-        sets: src.ex.sets.filter(store.hasData).map((st) => ({ ...store.newSet(), weight: st.weight ?? null, reps: st.reps ?? '', min: st.min ?? null, km: st.km ?? null, note: st.note ?? '' })),
+        sets: src.ex.sets.filter(store.hasData).map((st) => ({
+          ...store.newSet(null, { drop: !!st.drop }),
+          weight: st.weight ?? null, reps: st.reps ?? '', min: st.min ?? null, km: st.km ?? null, note: st.note ?? '',
+        })),
       });
       close();
       commit();
@@ -306,7 +327,7 @@ export async function renderDay(root, { date }) {
                   h('div', { class: 'muted small' }, `${src.ex.name} · ${setup(src.ex)}`)),
                 h('button', { class: 'btn secondary small-btn', onclick: () => use(src) }, 'Use these sets')),
               h('div', { class: 'chips' },
-                src.ex.sets.filter(store.hasData).map((st) => h('span', { class: `chip ${st.done ? '' : 'faded'}` }, setText(src.ex, st))))))
+                src.ex.sets.filter(store.hasData).map((st) => h('span', { class: `chip ${st.done ? '' : 'faded'} ${st.drop ? 'drop' : ''}` }, store.setLabel(src.ex, st))))))
         : h('p', { class: 'empty' }, `No ${family.label.toLowerCase()} sets in the last 3 weeks.`)
     );
   }
