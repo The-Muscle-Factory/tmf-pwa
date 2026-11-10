@@ -160,8 +160,15 @@ export async function renderDay(root, { date }) {
       h('button', {
         class: 'btn ghost add-set',
         onclick: () => {
-          const drop = !!prev?.ex.sets[ex.sets.length]?.drop;
-          ex.sets.push(store.newSet(ex.sets[ex.sets.length - 1], { drop }));
+          // Within last time's sets, start empty so PREVIOUS (grey) shows that set's
+          // numbers; beyond them, copy the weight from the set above (typed, or its
+          // grey PREVIOUS weight if still empty).
+          const i = ex.sets.length;
+          const last = prev?.ex.sets[i];
+          const above = ex.sets[i - 1];
+          ex.sets.push(last
+            ? store.newSet(null, { drop: !!last.drop })
+            : store.newSet({ weight: above?.weight ?? prev?.ex.sets[i - 1]?.weight }));
           commit();
         },
       }, '+ Add set')

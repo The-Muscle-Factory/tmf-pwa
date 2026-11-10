@@ -127,12 +127,13 @@ export async function previousSameWorkout(day) {
 }
 
 // Appends another day's exercises with one empty set each; PREVIOUS shows the old numbers.
-// Exercises skipped last time are flagged so the card can say so; a first set
-// that was a drop set starts as one again.
+// Each exercise gets as many empty sets as last time (drop sets stay drop sets),
+// so PREVIOUS shows every set's numbers. Templates carry no sets and get one.
+// Exercises skipped last time are flagged so the card can say so.
 export function repeatExercises(source, day) {
   const copies = source.exercises.map((e) => {
     const ex = newExercise(e);
-    if (e.sets?.[0]?.drop) ex.sets[0].drop = true;
+    if (e.sets?.length) ex.sets = e.sets.map((s) => newSet(null, { drop: !!s.drop }));
     if (e.skipped) ex.skippedBefore = { date: source.date, note: e.skipped.note || '' };
     return ex;
   });
