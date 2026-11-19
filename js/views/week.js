@@ -1,6 +1,6 @@
 import { h, mount } from '../dom.js';
 import * as store from '../store.js';
-import { addDays, weekStart, todayISO, weekdayShort, dayMonth, fromISO } from '../dates.js';
+import { addDays, weekStart, todayISO, weekdayShort, dayMonth, fromISO, fmtHM } from '../dates.js';
 
 export async function renderWeek(root, { date }) {
   const start = weekStart(date);
@@ -51,7 +51,7 @@ export async function renderWeek(root, { date }) {
             { class: 'day-body' },
             h('div', { class: 'day-title' }, d.title || (d.exercises.length ? 'Workout' : 'No workout logged')),
             d.exercises.length
-              ? h('div', { class: 'day-meta' }, `${d.exercises.length} exercises · ${doneSets}/${allSets} sets${skipped ? ` · ${skipped} skipped` : ''}`)
+              ? h('div', { class: 'day-meta' }, `${d.exercises.length} exercises · ${doneSets}/${allSets} sets${skipped ? ` · ${skipped} skipped` : ''}${d.startedAt ? ` · ${fmtHM(d.startedAt)}` : ''}`)
               : d.notes
                 ? h('div', { class: 'day-meta' }, d.notes.slice(0, 60))
                 : null

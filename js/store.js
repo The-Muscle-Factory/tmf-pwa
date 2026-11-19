@@ -2,7 +2,10 @@
 //
 // Day shape (v2):
 //   { v: 2, date: 'YYYY-MM-DD', type: 'Push' | … | 'Custom' | '', title: 'Push', notes: '',
-//     exercises: [Exercise] }
+//     exercises: [Exercise], startedAt?: 'HH:MM', endedAt?: 'HH:MM' }
+// startedAt/endedAt are set automatically when sets are ticked on the day itself
+// (first tick, and latest tick as an approximate end). Only startedAt is editable.
+// Older days simply lack them.
 // Exercise:
 //   { id, exId: dataset id or 'custom:<slug>', name, equipment, ratio: '1:1'|'2:1'|null,
 //     unit: 'kg'|'lbs', sets: [Set] }
@@ -140,6 +143,31 @@ export function repeatExercises(source, day) {
   return { ...day, exercises: [...day.exercises, ...copies] };
 }
 
+// ---- Exercise notes ----
+// One record per exercise: { exId, pinned: '', next: { text, date } | null }.
+// A pinned note shows every time. A "next time" note written on `date` shows
+// on that day and on the next day the exercise is logged, then expires.
+export async function getExerciseNote(exId) {
+  return (await db.get('exerciseNotes', exId)) || { exId, pinned: '', next: null };
+}
+
+export async function saveExerciseNote(note) {
+  if (!note.pinned && !note.next) return db.del('exerciseNotes', note.exId);
+  return db.put('exerciseNotes', note);
+}
+
+// The notes to show for an exercise when viewing `date`.
+export async function notesFor(exId, date) {
+  const note = await getExerciseNote(exId);
+  let next = null;
+  if (note.next && date >= note.next.date) {
+    const done = await sessions((e) => e.exId === exId, date);
+    // Expired once the exercise was logged on a day after the note and before this one.
+    if (date === note.next.date || !done.some((s) => s.date > note.next.date)) next = note.next;
+  }
+  return { pinned: note.pinned, next };
+}
+
 // ---- Templates ----
 // Template shape: { v: 2, id, name, exercises: [{ exId, name, equipment, ratio, unit }] }
 export async function getTemplates() {
@@ -204,6 +232,7 @@ export async function exportAll() {
     exportedAt: new Date().toISOString(),
     days: await db.getAll('days'),
     templates: await db.getAll('templates'),
+    exerciseNotes: await db.getAll('exerciseNotes'),
     settings: await getSettings(),
   };
 }
@@ -219,8 +248,10 @@ export async function importAll(data) {
   await loadLibrary();
   await db.clear('days');
   await db.clear('templates');
+  await db.clear('exerciseNotes');
   for (const d of data.days) await db.put('days', upgradeDay(d, uid));
   for (const t of data.templates || []) await db.put('templates', upgradeTemplate(t));
+  for (const n of data.exerciseNotes || []) await db.put('exerciseNotes', n);
   if (data.settings) await saveSettings({ ...DEFAULT_SETTINGS, ...data.settings });
 }
 
@@ -252,6 +283,9 @@ export async function mergeImport(data) {
       exercises: [...existing.exercises, ...extra.map((e) => ({ ...e, id: uid() }))],
     });
     merged++;
+  }
+  for (const n of data.exerciseNotes || []) {
+    if (!(await db.get('exerciseNotes', n.exId))) await db.put('exerciseNotes', n);
   }
   const names = new Set((await getTemplates()).map((t) => t.name.toLowerCase()));
   for (const t of data.templates || []) {
