@@ -95,7 +95,13 @@ export function swipeToDelete(wrap, card, onDelete) {
 // on the handle, so a pointer-based drag gets cancelled when the page starts
 // scrolling, whereas preventDefault() on touch events always stops the scroll.
 // Mouse and pen use pointer events.
-export function dragToReorder(list, { item, handle, onDrop }) {
+// Holding the item near the top or bottom of the visible area (`bounds()` gives
+// the edges in viewport pixels, e.g. below a sticky header and above a tab bar)
+// scrolls the page, faster the closer to the edge.
+export function dragToReorder(list, { item, handle, onDrop, bounds = () => ({ top: 0, bottom: window.innerHeight }) }) {
+  const EDGE = 70; // px from an edge where auto-scroll starts
+  const MAX_SPEED = 14; // px per frame at the very edge
+
   // Starts a drag of the item holding `grip`; returns { move(y), end() }.
   function begin(grip, y) {
     closeOpen?.();
@@ -105,16 +111,24 @@ export function dragToReorder(list, { item, handle, onDrop }) {
     if (from < 0) return null;
 
     list.classList.add('reordering');
-    const rects = items.map((el) => el.getBoundingClientRect()); // measured after collapsing
-    const r = rects[from];
-    const gap = items.length > 1 ? rects[1].top - rects[0].bottom : 0;
+    // Positions in page coordinates (measured after collapsing), so they stay
+    // valid while the page scrolls.
+    const tops = items.map((el) => {
+      const rc = el.getBoundingClientRect();
+      return { top: rc.top + window.scrollY, height: rc.height };
+    });
+    const r = tops[from];
+    const gap = items.length > 1 ? tops[1].top - (tops[0].top + tops[0].height) : 0;
     const step = r.height + gap; // how far neighbours move to make room
     let to = from;
+    let lastY = y;
+    let frame = 0;
     dragged.classList.add('dragging');
 
-    const move = (cy) => {
-      dragged.style.transform = `translateY(${cy - (r.top + r.height / 2)}px)`;
-      to = rects.filter((rc, i) => i !== from && rc.top + rc.height / 2 < cy).length;
+    const place = () => {
+      const pageY = lastY + window.scrollY;
+      dragged.style.transform = `translateY(${pageY - (r.top + r.height / 2)}px)`;
+      to = tops.filter((rc, i) => i !== from && rc.top + rc.height / 2 < pageY).length;
       items.forEach((el, i) => {
         if (i === from) return;
         let shift = 0;
@@ -123,13 +137,32 @@ export function dragToReorder(list, { item, handle, onDrop }) {
         el.style.transform = shift ? `translateY(${shift}px)` : '';
       });
     };
+    // Scrolls while the finger stays in an edge zone, then re-places the item.
+    const autoScroll = () => {
+      const { top, bottom } = bounds();
+      let speed = 0;
+      if (lastY < top + EDGE) speed = -MAX_SPEED * Math.min(1, (top + EDGE - lastY) / EDGE);
+      else if (lastY > bottom - EDGE) speed = MAX_SPEED * Math.min(1, (lastY - (bottom - EDGE)) / EDGE);
+      if (speed) {
+        const before = window.scrollY;
+        window.scrollBy(0, speed);
+        if (window.scrollY !== before) place();
+      }
+      frame = requestAnimationFrame(autoScroll);
+    };
+    const move = (cy) => {
+      lastY = cy;
+      place();
+    };
     const end = () => {
+      cancelAnimationFrame(frame);
       for (const el of items) el.style.transform = '';
       dragged.classList.remove('dragging');
       list.classList.remove('reordering');
       if (to !== from) onDrop(from, to);
     };
-    move(y);
+    place();
+    frame = requestAnimationFrame(autoScroll);
     return { move, end };
   }
 

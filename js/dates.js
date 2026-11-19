@@ -38,3 +38,22 @@ export const weekdayShort = (iso) => fmt(iso, { weekday: 'short' });
 export const weekdayLong = (iso) => fmt(iso, { weekday: 'long' });
 export const dayMonth = (iso) => fmt(iso, { day: 'numeric', month: 'short' });
 export const fullDate = (iso) => fmt(iso, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+
+// ---- Times of day, stored as local 'HH:MM' strings ----
+export const nowHM = () => {
+  const d = new Date();
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+
+export function fmtHM(hm) {
+  const [h, m] = hm.split(':').map(Number);
+  return new Date(2000, 0, 1, h, m).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+}
+
+// Minutes from `start` to `end`, wrapping past midnight.
+export function minutesBetween(start, end) {
+  const toMin = (hm) => { const [h, m] = hm.split(':').map(Number); return h * 60 + m; };
+  return (toMin(end) - toMin(start) + 1440) % 1440;
+}
+
+export const fmtDuration = (min) => (min >= 60 ? `${Math.floor(min / 60)} h ${min % 60} min` : `${min} min`);

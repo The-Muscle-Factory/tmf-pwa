@@ -49,6 +49,7 @@ Open it once with internet so it can save itself for offline use. **Settings →
   - **Cardio** records minutes, km and a note (speed, incline, level).
 - **PREVIOUS column:** last time's numbers for the same exercise, equipment and cable ratio. Tap to copy them, or tick ✓ to fill in blanks.
 - **Rest timer** starts when you tick a set (1:00 to 3:00, or off).
+- **Workout time:** the start time and duration are recorded as you tick sets, and you can edit them.
 - **Equipment** per exercise (barbell, dumbbell, cable, machine…), **cable ratio 1:1 / 2:1**, and **kg / lbs**.
 
 **Exercises**
@@ -57,7 +58,8 @@ Open it once with internet so it can save itself for offline use. **Settings →
 - **Recent sets:** the clock icon shows the last 3 weeks of that movement (e.g. every squat variation), with **Use these sets** to copy a session into today.
 
 **Editing**
-- Swipe an exercise left to delete it (with **Undo**). Drag the ⠿ handle to reorder.
+- Swipe an exercise left to delete it (with **Undo**). Drag the ⠿ handle to reorder; the page scrolls when you hold it near the top or bottom.
+- **Exercise notes:** a 📌 pinned note shows every time you do that exercise ("seat height 4"), and a note for next time shows only on your next session ("go up to 25 kg").
 - **Couldn't do:** mark a planned exercise as skipped with a short note. When you repeat that workout, it comes back with a **Skipped last time** tag.
 - Templates, day notes, clear a whole workout (with Undo).
 - **Backup:** export everything to a JSON file and import it on another phone, either merging or replacing.

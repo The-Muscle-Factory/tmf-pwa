@@ -341,3 +341,19 @@ button { background: none; border: 0; padding: 0; cursor: pointer; }
   background: rgba(245, 158, 11, 0.14); color: #f5b971; font-size: 12px; font-weight: 600;
 }
 .skipped-tag span { font-weight: 400; }
+
+/* ---- Exercise notes ---- */
+.ex-note {
+  display: block; width: 100%; text-align: left; margin: 6px 0 2px; padding: 7px 10px;
+  border-radius: 8px; font-size: 14px; line-height: 1.35; color: var(--text);
+}
+.ex-note.pinned { background: rgba(59, 130, 246, 0.12); }
+.ex-note.next { background: rgba(34, 197, 94, 0.12); }
+.ex-note.next b { font-weight: 600; }
+.view > .ex-note { margin: 0 0 10px; }
+
+/* ---- Workout time ---- */
+.time-row { display: block; margin: -4px 0 12px 2px; font-size: 14px; color: #cdd3de; }
+.time-row.muted { color: var(--muted); }
+.time-input { width: 100%; display: block; }
+.time-btns { margin-top: 18px; }

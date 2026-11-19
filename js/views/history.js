@@ -1,7 +1,7 @@
 import { h, mount } from '../dom.js';
 import * as store from '../store.js';
 import { byId, search, loadLibrary } from '../library.js';
-import { fullDate } from '../dates.js';
+import { fullDate, todayISO } from '../dates.js';
 import { infoBlock, exerciseSummary } from './exercise-info.js';
 
 const link = (exId) => `#/exercise/${encodeURIComponent(exId)}`;
@@ -42,6 +42,7 @@ export async function renderExercise(root, { exId }) {
   const entry = byId(exId);
   const { unit: displayUnit } = await store.getSettings();
   const sessions = await store.historyFor(exId);
+  const notes = await store.notesFor(exId, todayISO());
   const name = entry?.name || sessions[0]?.ex.name || 'Exercise';
 
   // Group by equipment/ratio so 1:1 and 2:1 cable numbers never mix.
@@ -62,9 +63,10 @@ export async function renderExercise(root, { exId }) {
       for (const { ex } of list) {
         for (const s of ex.sets) {
           // Drop sets log only the starting weight, so their reps would overstate strength.
-          if (s.weight == null || s.drop) continue;
-          const kg = store.toKg(s.weight, ex.unit);
+          // A weight with no reps (e.g. a pre-filled set never done) isn't a lift.
           const reps = store.repsTotal(s.reps);
+          if (s.weight == null || s.drop || !reps) continue;
+          const kg = store.toKg(s.weight, ex.unit);
           if (!best || kg > best.kg || (kg === best.kg && reps > best.reps)) best = { kg, reps };
           bestE1rm = Math.max(bestE1rm, e1rm(kg, reps));
         }
@@ -94,6 +96,8 @@ export async function renderExercise(root, { exId }) {
       h('div', { class: 'topbar-title' }, h('div', null, name), h('div', { class: 'sub' }, entry ? entry.equipment : 'Custom exercise')),
       h('span', { class: 'icon-btn' })
     ),
+    notes.pinned ? h('div', { class: 'ex-note pinned' }, '📌 ', notes.pinned) : null,
+    notes.next ? h('div', { class: 'ex-note next' }, `From ${fullDate(notes.next.date)}: `, h('b', null, notes.next.text)) : null,
     entry ? infoBlock(entry) : null,
     sessions.length ? [...groups].map(([label, list]) => group(label, list)) : h('p', { class: 'empty' }, 'No logged sets for this exercise yet.')
   );

@@ -1,6 +1,6 @@
 // Minimal promise wrapper around IndexedDB. No UI code here — reusable as-is from React later.
 const DB_NAME = 'tmf';
-const DB_VERSION = 1;
+const DB_VERSION = 2; // 2: exerciseNotes
 
 let dbPromise;
 
@@ -13,6 +13,7 @@ function open() {
       if (!db.objectStoreNames.contains('days')) db.createObjectStore('days', { keyPath: 'date' });
       if (!db.objectStoreNames.contains('templates')) db.createObjectStore('templates', { keyPath: 'id' });
       if (!db.objectStoreNames.contains('settings')) db.createObjectStore('settings', { keyPath: 'key' });
+      if (!db.objectStoreNames.contains('exerciseNotes')) db.createObjectStore('exerciseNotes', { keyPath: 'exId' });
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);

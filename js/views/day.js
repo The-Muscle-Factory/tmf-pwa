@@ -1,7 +1,7 @@
 import { h, debounce, toast, sheet, dialog, panel, svgIcon, mount } from '../dom.js';
 import * as store from '../store.js';
 import { DAY_TYPES, EQUIPMENT, RATIOS, movementFamily } from '../library.js';
-import { weekStart, fullDate, addDays, weekdayLong } from '../dates.js';
+import { weekStart, fullDate, addDays, weekdayLong, todayISO, nowHM, fmtHM, minutesBetween, fmtDuration } from '../dates.js';
 import { startTimer } from '../timer.js';
 import { swipeToDelete, dragToReorder } from '../gestures.js';
 import { pickExercise } from './picker.js';
@@ -14,6 +14,7 @@ export async function renderDay(root, { date }) {
   let day = await store.getDay(date);
   const settings = await store.getSettings();
   const previous = {}; // variantKey -> last session before this date
+  let notes = {}; // exId -> { pinned, next } to show on this day
   let lastSame = null; // last day with the same workout title
 
   const save = debounce(() => store.saveDay(day), 300);
@@ -26,6 +27,8 @@ export async function renderDay(root, { date }) {
       if (!(k in previous)) previous[k] = await store.lastSession(ex, date);
     }
     lastSame = day.exercises.length ? null : await store.previousSameWorkout(day);
+    notes = {};
+    for (const ex of day.exercises) notes[ex.exId] ||= await store.notesFor(ex.exId, date);
   }
 
   async function commit() {
@@ -84,6 +87,50 @@ export async function renderDay(root, { date }) {
             onchange: () => commit(),
           })
         : null
+    );
+  }
+
+  // ---- Workout time ----
+  // Ticking a set on the day itself records the start (first tick) and end
+  // (latest tick). Logging a past day afterwards doesn't, as the clock would be wrong.
+  let timeRow = null;
+  function stampTime() {
+    if (date !== todayISO()) return;
+    const now = nowHM();
+    day.startedAt ||= now;
+    day.endedAt = now;
+    timeRow?.replaceWith((timeRow = timeButton()));
+  }
+
+  function timeButton() {
+    if (!day.startedAt) {
+      return day.exercises.length && day.type !== 'Rest'
+        ? h('button', { class: 'time-row muted', onclick: editTime }, '🕒 Add workout time')
+        : h('span');
+    }
+    const mins = day.endedAt ? minutesBetween(day.startedAt, day.endedAt) : 0;
+    return h('button', { class: 'time-row', onclick: editTime },
+      `🕒 Started ${fmtHM(day.startedAt)}`, mins ? ` · ${fmtDuration(mins)}` : '');
+  }
+
+  function editTime() {
+    const start = h('input', { class: 'text time-input', type: 'time', value: day.startedAt || '' });
+    const end = h('input', { class: 'text time-input', type: 'time', value: day.endedAt || '' });
+    const close = panel(
+      'Workout time',
+      h('label', { class: 'label' }, 'Started'), start,
+      h('label', { class: 'label' }, 'Finished'), end,
+      h('div', { class: 'dialog-btns time-btns' },
+        h('button', { class: 'btn secondary', onclick: () => { delete day.startedAt; delete day.endedAt; close(); commit(); } }, 'Clear'),
+        h('button', {
+          class: 'btn primary',
+          onclick: () => {
+            if (start.value) day.startedAt = start.value; else delete day.startedAt;
+            if (start.value && end.value) day.endedAt = end.value; else delete day.endedAt;
+            close();
+            commit();
+          },
+        }, 'Save'))
     );
   }
 
@@ -148,6 +195,7 @@ export async function renderDay(root, { date }) {
       ex.skippedBefore
         ? h('div', { class: 'skipped-tag' }, 'Skipped last time', ex.skippedBefore.note ? h('span', null, ` · ${ex.skippedBefore.note}`) : null)
         : null,
+      noteBoxes(ex),
       prev ? h('div', { class: 'ex-last' }, `Last: ${fullDate(prev.date)}`) : null,
       h(
         'div',
@@ -225,6 +273,7 @@ export async function renderDay(root, { date }) {
           s.done = !s.done;
           row.classList.toggle('done', s.done);
           e.currentTarget.classList.toggle('on', s.done);
+          if (s.done) stampTime();
           save();
           if (s.done && settings.restSeconds > 0 && !cardio) startTimer(settings.restSeconds);
         },
@@ -255,6 +304,40 @@ export async function renderDay(root, { date }) {
     commit();
   }
 
+  // Pinned note and "next time" note under the exercise name; tap to edit.
+  function noteBoxes(ex) {
+    const n = notes[ex.exId];
+    if (!n) return null;
+    return [
+      n.pinned ? h('button', { class: 'ex-note pinned', onclick: () => editNote(ex, 'pinned') }, '📌 ', n.pinned) : null,
+      n.next
+        ? h('button', { class: 'ex-note next', onclick: () => editNote(ex, 'next') },
+            n.next.date === date ? 'Note for next time: ' : `From ${fullDate(n.next.date)}: `, h('b', null, n.next.text))
+        : null,
+    ];
+  }
+
+  async function editNote(ex, kind) {
+    const note = await store.getExerciseNote(ex.exId);
+    const pinned = kind === 'pinned';
+    const text = await dialog({
+      title: pinned ? `Pinned note · ${ex.name}` : `Note for next time · ${ex.name}`,
+      message: pinned
+        ? 'Shows every time you do this exercise. Leave empty to remove it.'
+        : 'Shows the next time you do this exercise, then disappears. Leave empty to remove it.',
+      input: {
+        placeholder: pinned ? 'e.g. seat height 4, use the rope' : 'e.g. go up to 25 kg',
+        value: pinned ? note.pinned : (note.next?.text ?? ''),
+      },
+      confirmLabel: 'Save',
+    });
+    if (text == null) return;
+    if (pinned) note.pinned = text;
+    else note.next = text ? { text, date } : null;
+    await store.saveExerciseNote(note);
+    commit();
+  }
+
   async function exerciseMenu(idx) {
     const ex = day.exercises[idx];
     const choice = await sheet(ex.name, ex.skipped
@@ -266,6 +349,8 @@ export async function renderDay(root, { date }) {
         ]
       : [
           { label: 'Recent sets (last 3 weeks)', value: 'recent' },
+          { label: '📌 Pinned note (every time)…', value: 'note-pinned' },
+          { label: '➜ Note for next time…', value: 'note-next' },
           { label: 'Info & history', value: 'info' },
           { label: 'Replace exercise', value: 'replace' },
           { label: 'Couldn’t do…', value: 'skip' },
@@ -273,6 +358,8 @@ export async function renderDay(root, { date }) {
         ]);
     if (choice === 'info') location.hash = `#/exercise/${encodeURIComponent(ex.exId)}`;
     else if (choice === 'recent') recentSets(ex);
+    else if (choice === 'note-pinned') editNote(ex, 'pinned');
+    else if (choice === 'note-next') editNote(ex, 'next');
     else if (choice === 'replace') {
       const picked = await pickExercise();
       if (picked) {
@@ -394,6 +481,11 @@ export async function renderDay(root, { date }) {
     dragToReorder(list, {
       item: '.swipe',
       handle: '.drag-handle',
+      // Visible area between the sticky header and the tab bar.
+      bounds: () => ({
+        top: document.querySelector('.topbar')?.getBoundingClientRect().bottom ?? 0,
+        bottom: document.getElementById('tabs')?.getBoundingClientRect().top ?? window.innerHeight,
+      }),
       onDrop: (from, to) => {
         const [moved] = day.exercises.splice(from, 1);
         day.exercises.splice(to, 0, moved);
@@ -416,6 +508,7 @@ export async function renderDay(root, { date }) {
         h('button', { class: 'icon-btn', 'aria-label': 'Next day', onclick: () => (location.hash = `#/day/${addDays(date, 1)}`) }, '›')
       ),
       h('div', { class: 'type-wrap' }, typeSection(), h('button', { class: 'icon-btn small', 'aria-label': 'Workout options', onclick: dayMenu }, '⋯')),
+      (timeRow = timeButton()),
       lastSame && !rest
         ? h('button', { class: 'btn secondary wide', onclick: () => { day = store.repeatExercises(lastSame, day); commit(); } },
             `↺ Repeat last ${day.title} (${fullDate(lastSame.date)})`)
