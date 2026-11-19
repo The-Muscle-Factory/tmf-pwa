@@ -49,7 +49,7 @@ Open it once with internet so it can save itself for offline use. **Settings →
   - **Cardio** records minutes, km and a note (speed, incline, level).
 - **PREVIOUS column:** last time's numbers for the same exercise, equipment and cable ratio. Tap to copy them, or tick ✓ to fill in blanks.
 - **Rest timer** starts when you tick a set (1:00 to 3:00, or off).
-- **Workout time:** the start time and duration are recorded as you tick sets, and you can edit them.
+- **Workout time:** the start time is recorded when you tick your first set (you can edit it), and an approximate duration runs up to your last ticked set.
 - **Equipment** per exercise (barbell, dumbbell, cable, machine…), **cable ratio 1:1 / 2:1**, and **kg / lbs**.
 
 **Exercises**

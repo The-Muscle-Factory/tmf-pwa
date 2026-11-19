@@ -91,8 +91,9 @@ export async function renderDay(root, { date }) {
   }
 
   // ---- Workout time ----
-  // Ticking a set on the day itself records the start (first tick) and end
-  // (latest tick). Logging a past day afterwards doesn't, as the clock would be wrong.
+  // Ticking a set on the day itself records the start (first tick) and an
+  // approximate end (latest tick). Only the start is editable. Logging a past day
+  // afterwards records nothing, as the clock would be wrong.
   let timeRow = null;
   function stampTime() {
     if (date !== todayISO()) return;
@@ -110,23 +111,24 @@ export async function renderDay(root, { date }) {
     }
     const mins = day.endedAt ? minutesBetween(day.startedAt, day.endedAt) : 0;
     return h('button', { class: 'time-row', onclick: editTime },
-      `🕒 Started ${fmtHM(day.startedAt)}`, mins ? ` · ${fmtDuration(mins)}` : '');
+      `🕒 Started ${fmtHM(day.startedAt)}`, mins ? ` · ~${fmtDuration(mins)}` : '');
   }
 
   function editTime() {
     const start = h('input', { class: 'text time-input', type: 'time', value: day.startedAt || '' });
-    const end = h('input', { class: 'text time-input', type: 'time', value: day.endedAt || '' });
     const close = panel(
-      'Workout time',
-      h('label', { class: 'label' }, 'Started'), start,
-      h('label', { class: 'label' }, 'Finished'), end,
+      'Workout start time',
+      start,
+      h('p', { class: 'muted small time-hint' }, 'The duration runs up to your last ticked set.'),
       h('div', { class: 'dialog-btns time-btns' },
         h('button', { class: 'btn secondary', onclick: () => { delete day.startedAt; delete day.endedAt; close(); commit(); } }, 'Clear'),
         h('button', {
           class: 'btn primary',
           onclick: () => {
-            if (start.value) day.startedAt = start.value; else delete day.startedAt;
-            if (start.value && end.value) day.endedAt = end.value; else delete day.endedAt;
+            if (start.value) day.startedAt = start.value;
+            else { delete day.startedAt; delete day.endedAt; }
+            // A start moved past the last tick would give a nonsense duration.
+            if (day.endedAt && minutesBetween(day.startedAt, day.endedAt) > 12 * 60) delete day.endedAt;
             close();
             commit();
           },

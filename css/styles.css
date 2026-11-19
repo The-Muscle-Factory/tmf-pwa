@@ -356,4 +356,5 @@ button { background: none; border: 0; padding: 0; cursor: pointer; }
 .time-row { display: block; margin: -4px 0 12px 2px; font-size: 14px; color: #cdd3de; }
 .time-row.muted { color: var(--muted); }
 .time-input { width: 100%; display: block; }
-.time-btns { margin-top: 18px; }
+.time-hint { margin: 10px 2px 0; }
+.time-btns { margin-top: 16px; }

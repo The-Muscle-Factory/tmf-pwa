@@ -4,7 +4,8 @@
 //   { v: 2, date: 'YYYY-MM-DD', type: 'Push' | … | 'Custom' | '', title: 'Push', notes: '',
 //     exercises: [Exercise], startedAt?: 'HH:MM', endedAt?: 'HH:MM' }
 // startedAt/endedAt are set automatically when sets are ticked on the day itself
-// (first and latest tick) and can be edited; older days simply lack them.
+// (first tick, and latest tick as an approximate end). Only startedAt is editable.
+// Older days simply lack them.
 // Exercise:
 //   { id, exId: dataset id or 'custom:<slug>', name, equipment, ratio: '1:1'|'2:1'|null,
 //     unit: 'kg'|'lbs', sets: [Set] }
